@@ -34,10 +34,6 @@ FAST-LIVO2 is an efficient and accurate LiDAR-inertial-visual fusion localizatio
 
 **Developer**: [Chunran Zheng 郑纯然](https://github.com/xuankuzcr)
 
-<div align="center">
-    <img src="pics/Framework.png" width = 100% >
-</div>
-
 ### 1.1 Related video
 
 Our accompanying video is now available on [**Bilibili**](https://www.bilibili.com/video/BV1Ezxge7EEi) and [**YouTube**](https://youtu.be/6dF2DzgbtlY).
