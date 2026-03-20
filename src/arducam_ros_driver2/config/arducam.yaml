@@ -1,0 +1,8 @@
+image_publish_node:
+  ros__parameters:
+    cam_port: '/dev/video0'
+    cam_width: 2592
+    cam_height: 1944
+    cam_format: 'YUY2'
+    out_width: 1280
+    out_height: 720

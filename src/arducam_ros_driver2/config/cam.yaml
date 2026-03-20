@@ -1,0 +1,3 @@
+image_publish_node:
+  ros__parameters:
+    base_hz: 25.0
