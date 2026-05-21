@@ -1,0 +1,8 @@
+build/
+install/
+log/
+.claude/
+trace/plots
+trace/log
+trace/notes
+trace/plots

@@ -1,0 +1,31 @@
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    appsink_buffers = LaunchConfiguration("appsink_buffers")
+    appsink_drop = LaunchConfiguration("appsink_drop")
+    diag_sleep_ms = LaunchConfiguration("diag_sleep_ms")
+    expected_trigger_hz = LaunchConfiguration("expected_trigger_hz")
+
+    camera_node = Node(
+        package="image_ros2_driver_sync",
+        executable="see3cam24cug_trigger_sd",
+        name="see3cam24cug_trigger_sd",
+        output="screen",
+        emulate_tty=True,
+    )
+
+    return LaunchDescription([
+        DeclareLaunchArgument("appsink_buffers", default_value="4"),
+        DeclareLaunchArgument("appsink_drop", default_value="true"),
+        DeclareLaunchArgument("diag_sleep_ms", default_value="0"),
+        DeclareLaunchArgument("expected_trigger_hz", default_value="10"),
+        SetEnvironmentVariable("SEE3CAM_APPSINK_BUFFERS", appsink_buffers),
+        SetEnvironmentVariable("SEE3CAM_APPSINK_DROP", appsink_drop),
+        SetEnvironmentVariable("SEE3CAM_DIAG_SLEEP_MS", diag_sleep_ms),
+        SetEnvironmentVariable("SEE3CAM_EXPECTED_TRIGGER_HZ", expected_trigger_hz),
+        camera_node,
+    ])

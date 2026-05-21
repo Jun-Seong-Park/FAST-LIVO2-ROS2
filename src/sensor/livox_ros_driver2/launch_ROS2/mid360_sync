@@ -1,0 +1,35 @@
+import os
+
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable
+from launch.substitutions import LaunchConfiguration
+from launch_ros.actions import Node
+
+
+def generate_launch_description():
+    pkg_share = get_package_share_directory("livox_ros_driver2_sync")
+    default_params = os.path.join(pkg_share, "config", "mid360_sync.yaml")
+    default_lidar_cfg = os.path.join(pkg_share, "config", "MID360_config.json")
+    default_fastdds_xml = os.path.expanduser("~/fastdds_unicast.xml")
+
+    params_file = LaunchConfiguration("params_file")
+    lidar_cfg = LaunchConfiguration("lidar_cfg")
+    fastdds_xml = LaunchConfiguration("fastdds_xml")
+
+    lidar_node = Node(
+        package="livox_ros_driver2_sync",
+        executable="livox_ros_driver2_sync_node",
+        name="livox_lidar_publisher",
+        output="screen",
+        parameters=[params_file, {"user_config_path": lidar_cfg}],
+        emulate_tty=True,
+    )
+
+    return LaunchDescription([
+        DeclareLaunchArgument("params_file", default_value=default_params),
+        DeclareLaunchArgument("lidar_cfg", default_value=default_lidar_cfg),
+        DeclareLaunchArgument("fastdds_xml", default_value=default_fastdds_xml),
+        SetEnvironmentVariable("FASTRTPS_DEFAULT_PROFILES_FILE", fastdds_xml),
+        lidar_node,
+    ])

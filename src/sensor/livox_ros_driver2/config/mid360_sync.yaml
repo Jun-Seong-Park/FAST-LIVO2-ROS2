@@ -1,0 +1,17 @@
+livox_lidar_publisher:
+  ros__parameters:
+    xfer_format: 1
+    multi_topic: 0
+    data_src: 0
+    publish_freq: 10.0
+    output_data_type: 0
+    frame_id: "livox_frame"
+    lvx_file_path: "/home/livox/livox_test.lvx"
+    cmdline_input_bd_code: "livox0000000001"
+
+    # GPRMC time sync is handled inside livox_ros_driver2_sync.
+    # Do not run the old external livox-gps-sync service at the same time.
+    gprmc_enabled: true
+    gprmc_port: "/dev/ttyUSB0"
+    gprmc_baud: 9600
+    gprmc_parity: "8N1"

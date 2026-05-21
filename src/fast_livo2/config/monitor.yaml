@@ -1,0 +1,21 @@
+fast_livo_monitor:
+  ros__parameters:
+    robot_name: "orin22"
+    relay_list:
+      - "/LIVO2/imu_propagate:nav_msgs/msg/Odometry"
+      - "/Laser_map:sensor_msgs/msg/PointCloud2"
+      - "/aft_mapped_to_init:geometry_msgs/msg/PoseStamped"
+      - "/cloud_effected:sensor_msgs/msg/PointCloud2"
+      - "/cloud_registered:sensor_msgs/msg/PointCloud2"
+      - "/cloud_visual_sub_map_before:sensor_msgs/msg/PointCloud2"
+      - "/dyn_obj:sensor_msgs/msg/PointCloud2"
+      - "/dyn_obj_dbg_hist:sensor_msgs/msg/PointCloud2"
+      - "/dyn_obj_removed:sensor_msgs/msg/PointCloud2"
+      - "/mavros/vision_pose/pose:geometry_msgs/msg/PoseStamped"
+      - "/path:nav_msgs/msg/Path"
+      - "/planes:visualization_msgs/msg/MarkerArray"
+      - "/planner_normal:visualization_msgs/msg/Marker"
+      - "/tf:tf2_msgs/msg/TFMessage"
+      - "/visualization_marker:visualization_msgs/msg/MarkerArray"
+      - "/voxels:visualization_msgs/msg/MarkerArray"
+      #- "/rgb_img/compressed:sensor_msgs/msg/CompressedImage"
