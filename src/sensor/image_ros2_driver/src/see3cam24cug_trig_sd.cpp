@@ -44,7 +44,7 @@ constexpr int         kCaptureFps     = 60;
 constexpr const char* kTopicName      = "/camera/image";
 constexpr const char* kNodeName       = "see3cam24cug_trig_sd";
 constexpr const char* kLogLabel       = "[see3cam24cug_sd]";
-const std::string kBlackboxPath = blackbox::trace_log_dir() + "/see3cam24cug_sd_image_pub.bin";
+const std::string kBlackboxPath = blackbox::log_dir() + "/see3cam24cug_sd_image_pub.bin";
 }  // namespace
 
 class See3cam24cugTrigSd : public rclcpp::Node
@@ -66,7 +66,7 @@ class See3cam24cugTrigSd : public rclcpp::Node
     blackbox::image::init(kBlackboxPath);
 
     publisher_ = create_publisher<sensor_msgs::msg::Image>(
-      kTopicName, rclcpp::SensorDataQoS());
+      kTopicName, rclcpp::QoS(rclcpp::KeepLast(60)).best_effort().durability_volatile());
 
     init_pool();
 
@@ -170,7 +170,7 @@ class See3cam24cugTrigSd : public rclcpp::Node
       return false;
     }
 
-    // pad probe: v4l2src src pad — DQBUF 완료 직후 MonoRawNs() 기록
+    // pad probe: v4l2src src pad — DQBUF 완료 직후 mono_raw_ns() 기록
     GstElement *src_elem = gst_bin_get_by_name(GST_BIN(pipeline_), "src");
     if (src_elem) {
       GstPad *src_pad = gst_element_get_static_pad(src_elem, "src");
@@ -185,7 +185,7 @@ class See3cam24cugTrigSd : public rclcpp::Node
   }
 
   static GstPadProbeReturn on_v4l2src_push_static(GstPad*, GstPadProbeInfo*, gpointer data) {
-    static_cast<See3cam24cugTrigSd*>(data)->t_dqbuf_ns_ = blackbox::MonoRawNs();
+    static_cast<See3cam24cugTrigSd*>(data)->t_dqbuf_ns_ = blackbox::mono_raw_ns();
     return GST_PAD_PROBE_OK;
   }
 
@@ -210,8 +210,8 @@ class See3cam24cugTrigSd : public rclcpp::Node
   }
 
   static void write_sync_done_marker() {
-    uint64_t mono_ns = blackbox::MonoRawNs();
-    const std::string sync_path = blackbox::trace_log_dir() + "/sync_done_mono_ns";
+    uint64_t mono_ns = blackbox::mono_raw_ns();
+    const std::string sync_path = blackbox::log_dir() + "/sync_done_mono_ns";
     blackbox::detail::mkdir_for_file(sync_path);
     int fd = ::open(sync_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd >= 0) {
@@ -444,7 +444,7 @@ class See3cam24cugTrigSd : public rclcpp::Node
   GstElement       *pipeline_;
   GMainLoop        *gst_loop_;
   std::thread       gst_thread_;
-  uint64_t          t_dqbuf_ns_{0};  // pad probe: MonoRawNs() at v4l2src push
+  uint64_t          t_dqbuf_ns_{0};  // pad probe: mono_raw_ns() at v4l2src push
 
   uint64_t stamped_count_       = 0;
   int      skip_remaining_      = cfg::kSkipFrames;

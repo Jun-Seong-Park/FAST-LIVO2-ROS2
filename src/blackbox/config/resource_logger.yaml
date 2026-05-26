@@ -1,0 +1,14 @@
+/resource_logger:
+  ros__parameters:
+    sample_period_s: 1.0
+    proc_prefixes:
+      - "see3cam24cug"
+      - "fastlivo_mapping"
+      - "livox_ros_driver2"
+    net_ifaces:
+      - "enP8p1s0"
+      - "wlP1p1s0"
+      - "tailscale0"
+      - "lo"
+    log_dir: ""           # empty → blackbox::log_dir() = $HOME/FAST-LIVO2-ROS2/blackbox/log
+    max_scan_pids: 4096

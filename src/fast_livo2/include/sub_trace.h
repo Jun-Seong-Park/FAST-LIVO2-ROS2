@@ -42,7 +42,7 @@ static size_t    g_flushed_sub_image = 0;
 static bool      g_trace_files_initialized = false;
 static uint64_t  g_last_flush_mono_ns = 0;
 
-static inline uint64_t MonoRawNs() {
+static inline uint64_t mono_raw_ns() {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
   return static_cast<uint64_t>(ts.tv_sec) * 1000000000ULL
@@ -111,7 +111,7 @@ static inline void FlushSubTraces() {
   g_flushed_sub_lidar = g_idx_sub_lidar;
   g_flushed_sub_imu = g_idx_sub_imu;
   g_flushed_sub_image = g_idx_sub_image;
-  g_last_flush_mono_ns = MonoRawNs();
+  g_last_flush_mono_ns = mono_raw_ns();
 }
 
 static inline void MaybeFlushSubTraces(uint64_t mono_ns) {
@@ -123,7 +123,7 @@ static inline void MaybeFlushSubTraces(uint64_t mono_ns) {
 
 static inline void RecordSubLidar(uint64_t stamp_ns) {
   if (g_idx_sub_lidar < kSubBufN) {
-    const uint64_t mono_ns = MonoRawNs();
+    const uint64_t mono_ns = mono_raw_ns();
     g_buf_sub_lidar[g_idx_sub_lidar] = {stamp_ns, mono_ns, g_idx_sub_lidar};
     g_idx_sub_lidar++;
     MaybeFlushSubTraces(mono_ns);
@@ -132,7 +132,7 @@ static inline void RecordSubLidar(uint64_t stamp_ns) {
 
 static inline void RecordSubImu(uint64_t stamp_ns) {
   if (g_idx_sub_imu < kSubBufN) {
-    const uint64_t mono_ns = MonoRawNs();
+    const uint64_t mono_ns = mono_raw_ns();
     g_buf_sub_imu[g_idx_sub_imu] = {stamp_ns, mono_ns, g_idx_sub_imu};
     g_idx_sub_imu++;
     MaybeFlushSubTraces(mono_ns);
@@ -141,7 +141,7 @@ static inline void RecordSubImu(uint64_t stamp_ns) {
 
 static inline void RecordSubImage(uint64_t stamp_ns) {
   if (g_idx_sub_image < kSubBufN) {
-    const uint64_t mono_ns = MonoRawNs();
+    const uint64_t mono_ns = mono_raw_ns();
     g_buf_sub_image[g_idx_sub_image] = {stamp_ns, mono_ns, g_idx_sub_image};
     g_idx_sub_image++;
     MaybeFlushSubTraces(mono_ns);

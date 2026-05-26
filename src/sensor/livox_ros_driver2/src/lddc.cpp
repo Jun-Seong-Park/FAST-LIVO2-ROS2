@@ -95,8 +95,9 @@ Lddc::Lddc(int format, int multi_topic, int data_src, int output_type,
 #if 0
   bag_ = nullptr;
 #endif
-  blackbox::lidar::init(blackbox::trace_log_dir() + "/lidar_pubrecord.bin");
-  blackbox::imu::init(blackbox::trace_log_dir() + "/imu_pubrecord.bin");
+  blackbox::lidar::init(blackbox::log_dir() + "/lidar_pubrecord.bin");
+  blackbox::imu::init(blackbox::log_dir() + "/imu_pubrecord.bin");
+  blackbox::lidar_resource::init(blackbox::log_dir() + "/lidar_resource.bin");
 }
 #endif
 
@@ -104,6 +105,7 @@ Lddc::~Lddc() {
 #ifdef BUILDING_ROS2
   blackbox::lidar::shutdown();
   blackbox::imu::shutdown();
+  blackbox::lidar_resource::shutdown();
 #endif
   // mmap 공유 타임스탬프 해제 (LIV_handhold inline writer)
   if (shared_stamp_ != nullptr) {

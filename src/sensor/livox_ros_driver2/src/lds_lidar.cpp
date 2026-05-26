@@ -26,6 +26,9 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <thread>
@@ -50,9 +53,125 @@
 #include "call_back/lidar_common_callback.h"
 #include "call_back/livox_lidar_callback.h"
 
+#include "blackbox/blackbox.hpp"
+
 using namespace std;
 
 namespace livox_ros {
+
+/**
+ * MID-360 push msg (cmd_id 0x0102, 1 Hz) → blackbox::lidar_resource
+ *   Wire-verified 2026-05-26: 4 keys (core_temp / lidar_diag_status /
+ *   cur_work_state / hms_code) always co-bundled per packet (30/30).
+ *   SDK delivers parsed JSON string in `info`. We extract with strstr+strtol
+ *   (zero-dependency, pattern from Livox-SDK2/samples/livox_lidar_temp_logger).
+ */
+namespace
+{
+
+// Locate the value start (first char after the colon following `"key"`)
+// inside `json`. Returns nullptr if the key is absent.
+const char * FindValueStart(const char * json, const char * quoted_key)
+{
+  const char * k = std::strstr(json, quoted_key);
+  if (k == nullptr) {
+    return nullptr;
+  }
+  const char * colon = std::strchr(k, ':');
+  if (colon == nullptr) {
+    return nullptr;
+  }
+  return colon + 1;
+}
+
+bool ExtractInt32(const char * json, const char * quoted_key, int32_t & out)
+{
+  const char * v = FindValueStart(json, quoted_key);
+  if (v == nullptr) {
+    return false;
+  }
+  char * end = nullptr;
+  long parsed = std::strtol(v, &end, 10);
+  if (end == v) {
+    return false;
+  }
+  out = static_cast<int32_t>(parsed);
+  return true;
+}
+
+bool ExtractUint32(const char * json, const char * quoted_key, uint32_t & out)
+{
+  const char * v = FindValueStart(json, quoted_key);
+  if (v == nullptr) {
+    return false;
+  }
+  char * end = nullptr;
+  unsigned long parsed = std::strtoul(v, &end, 10);
+  if (end == v) {
+    return false;
+  }
+  out = static_cast<uint32_t>(parsed);
+  return true;
+}
+
+// hms_code is a fixed 8-element array: `"hms_code":[v0,v1,...,v7]`.
+// SDK writes all 8 unconditionally (parse_lidar_state_info.cpp:694-706).
+bool ExtractHmsCode8(const char * json, uint32_t out[8])
+{
+  const char * v = FindValueStart(json, "\"hms_code\"");
+  if (v == nullptr) {
+    return false;
+  }
+  const char * lb = std::strchr(v, '[');
+  if (lb == nullptr) {
+    return false;
+  }
+  const char * p = lb + 1;
+  for (int i = 0; i < 8; ++i) {
+    char * end = nullptr;
+    unsigned long parsed = std::strtoul(p, &end, 10);
+    if (end == p) {
+      return false;
+    }
+    out[i] = static_cast<uint32_t>(parsed);
+    p = end;
+    while (*p == ' ' || *p == ',') {
+      ++p;
+    }
+  }
+  return true;
+}
+
+void LidarStatusPushCallback(const uint32_t /*handle*/,
+                             const uint8_t  /*dev_type*/,
+                             const char *   info,
+                             void *         /*client_data*/)
+{
+  if (info == nullptr) {
+    return;
+  }
+
+  int32_t  core_temp_centi  = 0;
+  uint32_t lidar_diag       = 0;
+  uint32_t cur_work_state32 = 0;
+  uint32_t hms_code[8]      = {0};
+
+  const bool ok_temp = ExtractInt32 (info, "\"core_temp\"",         core_temp_centi);
+  const bool ok_diag = ExtractUint32(info, "\"lidar_diag_status\"", lidar_diag);
+  const bool ok_ws   = ExtractUint32(info, "\"cur_work_state\"",    cur_work_state32);
+  const bool ok_hms  = ExtractHmsCode8(info, hms_code);
+
+  if (!(ok_temp && ok_diag && ok_ws && ok_hms)) {
+    return;   // partial key set → drop
+  }
+
+  blackbox::lidar_resource::log(core_temp_centi,
+                                static_cast<uint16_t>(lidar_diag),
+                                static_cast<uint8_t>(cur_work_state32),
+                                hms_code);
+}
+
+}  // namespace
 
 /** Const varible ------------------------------------------------------------*/
 /** For callback use only */
@@ -180,6 +299,7 @@ bool LdsLidar::InitLivoxLidar() {
   }
 
   SetLivoxLidarInfoChangeCallback(LivoxLidarCallback::LidarInfoChangeCallback, g_lds_ldiar);
+  SetLivoxLidarInfoCallback(LidarStatusPushCallback, nullptr);
   return true;
 }
 

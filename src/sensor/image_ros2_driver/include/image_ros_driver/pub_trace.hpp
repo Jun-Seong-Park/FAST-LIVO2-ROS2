@@ -69,7 +69,7 @@ inline size_t    g_idx = 0;
 inline DropSample g_drop_buf[kDropBufN];
 inline size_t     g_drop_idx = 0;
 
-inline uint64_t MonoRawNs() {
+inline uint64_t mono_raw_ns() {
   struct timespec ts;
   clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
   return static_cast<uint64_t>(ts.tv_sec) * 1000000000ULL

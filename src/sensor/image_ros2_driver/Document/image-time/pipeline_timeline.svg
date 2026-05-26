@@ -147,7 +147,7 @@
   <text x="870" y="273" text-anchor="middle"
         font-size="9" fill="#145a22">pad probe on v4l2src src pad</text>
   <text x="870" y="288" text-anchor="middle"
-        font-size="9" fill="#145a22">blackbox::MonoRawNs()</text>
+        font-size="9" fill="#145a22">blackbox::mono_raw_ns()</text>
   <text x="870" y="303" text-anchor="middle"
         font-size="9" fill="#1a7a30">DQBUF complete, pipeline entry</text>
   <text x="870" y="318" text-anchor="middle"
@@ -161,7 +161,7 @@
   <text x="1300" y="273" text-anchor="middle"
         font-size="9" fill="#002060">on_new_sample()</text>
   <text x="1300" y="288" text-anchor="middle"
-        font-size="9" fill="#002060">blackbox::MonoRawNs()</text>
+        font-size="9" fill="#002060">blackbox::mono_raw_ns()</text>
   <text x="1300" y="303" text-anchor="middle"
         font-size="9" fill="#1a4fa0">appsink callback fired</text>
   <text x="1300" y="318" text-anchor="middle"
@@ -175,7 +175,7 @@
   <text x="1520" y="273" text-anchor="middle"
         font-size="9" fill="#002060">log_pub()</text>
   <text x="1520" y="288" text-anchor="middle"
-        font-size="9" fill="#002060">blackbox::MonoRawNs()</text>
+        font-size="9" fill="#002060">blackbox::mono_raw_ns()</text>
   <text x="1520" y="303" text-anchor="middle"
         font-size="9" fill="#003399">ROS2 publisher_->publish()</text>
   <text x="1520" y="318" text-anchor="middle"

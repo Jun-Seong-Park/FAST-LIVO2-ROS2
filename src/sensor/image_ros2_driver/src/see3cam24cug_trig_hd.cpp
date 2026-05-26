@@ -44,7 +44,7 @@ constexpr int         kCaptureFps     = 60;
 constexpr const char* kTopicName      = "/camera/image";
 constexpr const char* kNodeName       = "see3cam24cug_trig_hd";
 constexpr const char* kLogLabel       = "[see3cam24cug_hd]";
-const std::string kBlackboxPath = blackbox::trace_log_dir() + "/see3cam24cug_hd_image_pub.bin";
+const std::string kBlackboxPath = blackbox::log_dir() + "/see3cam24cug_hd_image_pub.bin";
 }  // namespace
 
 class See3cam24cugTrigHd : public rclcpp::Node
@@ -66,7 +66,7 @@ class See3cam24cugTrigHd : public rclcpp::Node
     blackbox::image::init(kBlackboxPath);
 
     publisher_ = create_publisher<sensor_msgs::msg::Image>(
-      kTopicName, rclcpp::SensorDataQoS());
+      kTopicName, rclcpp::QoS(rclcpp::KeepLast(60)).best_effort().durability_volatile());
 
     init_pool();
 
@@ -184,7 +184,7 @@ class See3cam24cugTrigHd : public rclcpp::Node
   }
 
   static GstPadProbeReturn on_v4l2src_push_static(GstPad*, GstPadProbeInfo*, gpointer data) {
-    static_cast<See3cam24cugTrigHd*>(data)->t_dqbuf_ns_ = blackbox::MonoRawNs();
+    static_cast<See3cam24cugTrigHd*>(data)->t_dqbuf_ns_ = blackbox::mono_raw_ns();
     return GST_PAD_PROBE_OK;
   }
 
@@ -209,8 +209,8 @@ class See3cam24cugTrigHd : public rclcpp::Node
   }
 
   static void write_sync_done_marker() {
-    uint64_t mono_ns = blackbox::MonoRawNs();
-    const std::string sync_path = blackbox::trace_log_dir() + "/sync_done_mono_ns";
+    uint64_t mono_ns = blackbox::mono_raw_ns();
+    const std::string sync_path = blackbox::log_dir() + "/sync_done_mono_ns";
     blackbox::detail::mkdir_for_file(sync_path);
     int fd = ::open(sync_path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd >= 0) {

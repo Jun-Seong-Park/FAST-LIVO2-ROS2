@@ -61,9 +61,9 @@ LIVMapper::LIVMapper(rclcpp::Node::SharedPtr &node, std::string node_name)
   p_imu.reset(new ImuProcess());
 
   readParameters(this->node);
-  blackbox::sub_lidar::init(blackbox::trace_log_dir() + "/lidar_subrecord.bin");
-  blackbox::sub_imu::init(blackbox::trace_log_dir() + "/imu_subrecord.bin");
-  blackbox::sub_image::init(blackbox::trace_log_dir() + "/image_subrecord.bin");
+  blackbox::sub_lidar::init(blackbox::log_dir() + "/lidar_subrecord.bin");
+  blackbox::sub_imu::init(blackbox::log_dir() + "/imu_subrecord.bin");
+  blackbox::sub_image::init(blackbox::log_dir() + "/image_subrecord.bin");
   VoxelMapConfig voxel_config;
   loadVoxelConfig(this->node, voxel_config);
 
