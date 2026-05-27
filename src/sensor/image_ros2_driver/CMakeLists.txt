@@ -32,11 +32,21 @@ add_see3cam24cug_trig(hd)
 add_see3cam24cug_trig(wuxga)
 add_see3cam24cug_trig(wuxga_mjpg)
 
+# test variant — gscam2-style pull/single-thread (publish drop A/B 비교용).
+# blackbox 는 sd 와 동일 cascade (pad probe → log_cbk → log_pub), std_srvs 미사용.
+add_executable(see3cam24cug_test src/see3cam24cug_test.cpp)
+ament_target_dependencies(see3cam24cug_test rclcpp sensor_msgs)
+target_include_directories(see3cam24cug_test PRIVATE
+  include
+  ${GST_INCLUDE_DIRS})
+target_link_libraries(see3cam24cug_test ${GST_LIBRARIES} blackbox::blackbox)
+
 install(TARGETS
   see3cam24cug_trig_sd
   see3cam24cug_trig_hd
   see3cam24cug_trig_wuxga
   see3cam24cug_trig_wuxga_mjpg
+  see3cam24cug_test
   DESTINATION lib/${PROJECT_NAME}
 )
 

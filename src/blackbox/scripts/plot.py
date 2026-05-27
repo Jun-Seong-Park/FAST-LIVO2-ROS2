@@ -5,7 +5,7 @@ Wrapper: run all blackbox analyzers in sequence.
 Calls in order:
   1. analyze_sensor_publish.py    pub-side stats (lidar/imu/image) → plots/{lidar,imu,image}/
   2. analyze_sensor_subscribe.py  sub-side stats (lidar/imu/image) → plots/{lidar,imu,image}/
-  3. compare_pub_sub.py           pub vs sub match per stream      → plots/{lidar,imu,image}/
+  3. analyze_sensor_compare.py    pub vs sub match per stream      → plots/{lidar,imu,image}/
   4. analyze_resource.py          host + LiDAR device resource     → plots/resource/
 
 Each analyzer takes its own --log-dir / --out-dir. Defaults assume the package
@@ -23,10 +23,10 @@ SCRIPTS_DIR = Path(__file__).resolve().parent
 SCRIPTS = [
     'analyze_sensor_publish.py',
     'analyze_sensor_subscribe.py',
-    'compare_pub_sub.py',
+    'analyze_sensor_compare.py',
     'analyze_resource.py',
 ]
-
+    
 
 def main() -> int:
     for name in SCRIPTS:

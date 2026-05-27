@@ -58,6 +58,20 @@ assert DT_PUB.itemsize == 24
 
 
 # ────────────────────────────────────────────────────────────
+# plot target periods [ms] — match each stream's publish period
+# tol_pct: y-zoom half-width for Stamp Diff plot (status는 diff_status가 별도 판정)
+# ────────────────────────────────────────────────────────────
+CAM_TARGET_MS   = 100.0
+LIDAR_TARGET_MS = 100.0
+LIDAR_TOL_PCT   = 2.0
+IMU_TARGET_MS   = 5.0
+IMU_TOL_PCT     = 30.0
+
+# diff_status thresholds (% max-dev vs target). 동시에 status_ylim zoom 폭으로도 사용.
+STATUS_PCT = {'GOOD': 2.0, 'WARN': 5.0}
+
+
+# ────────────────────────────────────────────────────────────
 # style helpers
 # ────────────────────────────────────────────────────────────
 
@@ -82,6 +96,28 @@ def savefig(fig, path: Path):
     fig.tight_layout()
     fig.savefig(path, dpi=300, bbox_inches='tight')
     plt.close(fig)
+
+
+# ────────────────────────────────────────────────────────────
+# status thresholds (cascading max-deviation vs reference)
+# ────────────────────────────────────────────────────────────
+# 모든 값이 ref ±GOOD% 안 → GOOD. 하나라도 벗어나면 ±WARN% 로 판단 → WARN.
+# 하나라도 벗어나면 BAD.
+def diff_status(values: np.ndarray, ref: float) -> str:
+    if ref <= 0 or len(values) == 0:
+        return 'GOOD'
+    max_dev_pct = float(np.max(np.abs(values - ref)) / ref * 100.0)
+    if max_dev_pct <= STATUS_PCT['GOOD']: return 'GOOD'
+    if max_dev_pct <= STATUS_PCT['WARN']: return 'WARN'
+    return 'BAD'
+
+
+def status_ylim(ax, target_ms: float, status: str) -> None:
+    """GOOD: ±2% zoom, WARN: ±5% zoom, BAD: auto (data 끝까지)."""
+    if status == 'BAD':
+        return
+    pct = STATUS_PCT[status] / 100.0
+    ax.set_ylim(target_ms * (1 - pct), target_ms * (1 + pct))
 
 
 # ────────────────────────────────────────────────────────────
@@ -135,12 +171,15 @@ def cam_metrics(a: np.ndarray) -> dict:
 
 
 def cam_plot_combined(a: np.ndarray, m: dict, out_path: Path,
-                      target_ms: float = 100.0, tol_pct: float = 2.0):
-    t_all_s       = (a['t_cbk_ns'].astype(np.int64) - int(a['t_cbk_ns'][0])) / 1e9
-    t_valid_s     = t_all_s[m['pub_valid']]
-    t_axis        = t_all_s[1:]
-    stamp_diff_ms = np.diff(a['header_stamp'].astype(np.int64)) / 1e6
-    pct_stale     = 100.0 * len(m['stale']) / max(1, len(stamp_diff_ms))
+                      target_ms: float = CAM_TARGET_MS):
+    t_all_s        = (a['t_cbk_ns'].astype(np.int64) - int(a['t_cbk_ns'][0])) / 1e9
+    t_valid_s      = t_all_s[m['pub_valid']]
+    t_axis         = t_all_s[1:]
+    stamp_diff_ms  = np.diff(a['header_stamp'].astype(np.int64)) / 1e6
+
+    t_pub_valid_ns = a[m['pub_valid']]['t_pub_ns'].astype(np.int64)
+    t_pub_diff_ms  = np.diff(t_pub_valid_ns) / 1e6
+    t_pub_axis_s   = (t_pub_valid_ns[1:] - int(a['t_cbk_ns'][0])) / 1e9
 
     fig, axs = plt.subplots(3, 2, figsize=(12, 10), dpi=150)
 
@@ -158,19 +197,60 @@ def cam_plot_combined(a: np.ndarray, m: dict, out_path: Path,
     title(ax, 'CAM  Stacked Latency'); ylabel(ax, 'Latency [ms]'); xlabel(ax, 'Time [sec]')
     style(ax); legend(ax)
 
-    # ── [1,0] histogram: DQBUF→Pub distribution ──────────────────────────────
-    ax = axs[1, 0]
-    d = m['e2e_ms']
-    ax.hist(d, bins=40, color='C0', alpha=0.8, edgecolor='none')
-    ax.axvline(d.mean(), color='black', linestyle=':', linewidth=1.0,
-               label=f'Mean {d.mean():.2f} ms')
-    ax.axvline(np.percentile(d, 99), color='black', linestyle='--', linewidth=1.0,
-               label=f'P99 {np.percentile(d, 99):.2f} ms')
-    title(ax, 'CAM  DQBUF→Pub Distribution')
-    xlabel(ax, 'Latency [ms]'); ylabel(ax, 'Count')
+    # ── [0,1] histogram: MONOTONIC_RAW Diff distribution ─────────────────────
+    ax = axs[0, 1]
+    ax.hist(t_pub_diff_ms, bins=40, color='C0', alpha=0.8, edgecolor='none')
+    ax.axvline(t_pub_diff_ms.mean(),
+               color='black', linestyle=':', linewidth=1.0,
+               label=f'Mean {t_pub_diff_ms.mean():.2f} ms')
+    ax.axvline(np.percentile(t_pub_diff_ms, 99),
+               color='black', linestyle='--', linewidth=1.0,
+               label=f'P99 {np.percentile(t_pub_diff_ms, 99):.2f} ms')
+    title(ax, 'CAM  MONOTONIC_RAW Diff Distribution')
+    xlabel(ax, 'Pub Delta [ms]'); ylabel(ax, 'Count')
     style(ax); legend(ax)
 
-    # ── [2,0] header stamp vs index ──────────────────────────────────────────
+    # ── [1,0] MONOTONIC_RAW Diff (new) ───────────────────────────────────────
+    pub_mean_ms  = float(t_pub_diff_ms.mean())
+    pub_p99_ms   = float(np.percentile(t_pub_diff_ms, 99))
+    pub_worst_ms = float(t_pub_diff_ms[np.argmax(np.abs(t_pub_diff_ms - target_ms))])
+    pub_status   = diff_status(t_pub_diff_ms, target_ms)
+    ax = axs[1, 0]
+    ax.plot(t_pub_axis_s, t_pub_diff_ms, linewidth=1.5, color='C3')
+    ax.axhline(target_ms,    color='black', linestyle=':',  linewidth=1.0,
+               label=f'Target {target_ms:g} ms')
+    ax.axhline(pub_mean_ms,  color='black', linestyle='-',  linewidth=1.0,
+               label=f'Mean {pub_mean_ms:.2f} ms')
+    ax.axhline(pub_p99_ms,   color='black', linestyle='--', linewidth=1.0,
+               label=f'P99 {pub_p99_ms:.2f} ms')
+    ax.axhline(pub_worst_ms, color='C3',    linestyle='-.', linewidth=1.0,
+               label=f'Worst {pub_worst_ms:.2f} ms')
+    status_ylim(ax, target_ms, pub_status)
+    title(ax, f'CAM  MONOTONIC_RAW Diff  [{pub_status}]')
+    ylabel(ax, 'Pub Delta [ms]'); xlabel(ax, 'Time [sec]')
+    style(ax); legend(ax)
+
+    # ── [1,1] Stamp Diff ─────────────────────────────────────────────────────
+    stamp_mean_ms  = float(stamp_diff_ms.mean())
+    stamp_p99_ms   = float(np.percentile(stamp_diff_ms, 99))
+    stamp_worst_ms = float(stamp_diff_ms[np.argmax(np.abs(stamp_diff_ms - target_ms))])
+    stamp_status   = diff_status(stamp_diff_ms, target_ms)
+    ax = axs[1, 1]
+    ax.plot(t_axis, stamp_diff_ms, linewidth=1.5, color='C3')
+    ax.axhline(target_ms,      color='black', linestyle=':',  linewidth=1.0,
+               label=f'Target {target_ms:g} ms')
+    ax.axhline(stamp_mean_ms,  color='black', linestyle='-',  linewidth=1.0,
+               label=f'Mean {stamp_mean_ms:.2f} ms')
+    ax.axhline(stamp_p99_ms,   color='black', linestyle='--', linewidth=1.0,
+               label=f'P99 {stamp_p99_ms:.2f} ms')
+    ax.axhline(stamp_worst_ms, color='C3',    linestyle='-.', linewidth=1.0,
+               label=f'Worst {stamp_worst_ms:.2f} ms')
+    status_ylim(ax, target_ms, stamp_status)
+    title(ax, f'CAM  Stamp Diff  [{stamp_status}]')
+    ylabel(ax, 'Stamp Delta [ms]'); xlabel(ax, 'Time [sec]')
+    style(ax); legend(ax)
+
+    # ── [2,0] header stamp vs index (unchanged) ──────────────────────────────
     ax = axs[2, 0]
     idx     = np.arange(len(a['header_stamp']))
     stamp_s = (a['header_stamp'].astype(np.int64) - int(a['header_stamp'][0])) / 1e9
@@ -179,41 +259,16 @@ def cam_plot_combined(a: np.ndarray, m: dict, out_path: Path,
     ylabel(ax, 'Stamp [sec]'); xlabel(ax, 'Index [Sample]')
     style(ax)
 
-    # ── right column: seq & stamp health ─────────────────────────────────────
-    gap_n  = len(m['gaps'])
-    status = '[GOOD]' if gap_n == 0 else ('[WARN]' if gap_n < 100 else '[BAD]')
-
-    ax = axs[0, 1]
+    # ── [2,1] Drop Count seq_diff (moved from [0,1]) ─────────────────────────
+    gap_n     = len(m['gaps'])
+    drop_stat = 'GOOD' if gap_n == 0 else ('WARN' if gap_n < 100 else 'BAD')
+    ax = axs[2, 1]
     ax.plot(t_axis, m['seq_diff'], linewidth=1.5, color='C4')
     ax.axhline(1, color='black', linestyle=':', linewidth=1.0, label='Expected (=1)')
     ax.set_ylim(0, 2)
-    title(ax, f'CAM  Drop Count = {gap_n}  {status}')
+    title(ax, f'CAM  Drop Count = {gap_n}  [{drop_stat}]')
     ylabel(ax, 'Seq Diff [Frame]'); xlabel(ax, 'Time [sec]')
     style(ax); legend(ax)
-
-    tol     = tol_pct / 100.0
-    mean_ms = float(stamp_diff_ms.mean())
-    p99_ms  = float(np.percentile(stamp_diff_ms, 99))
-
-    ax = axs[1, 1]
-    ax.plot(t_axis, stamp_diff_ms, linewidth=1.5, color='C3')
-    ax.axhline(target_ms, color='black', linestyle=':', linewidth=1.0,
-               label=f'Target {target_ms:g} ms')
-    ax.axhline(mean_ms, color='black', linestyle='-',  linewidth=1.0,
-               label=f'Mean {mean_ms:.2f} ms')
-    ax.axhline(p99_ms,  color='black', linestyle='--', linewidth=1.0,
-               label=f'P99 {p99_ms:.2f} ms')
-    ax.set_ylim(target_ms * (1 - tol), target_ms * (1 + tol))
-    title(ax, f'Stamp Delta  Zoom +/-{tol_pct:g}%  '
-              f'Stale {len(m["stale"])} ({pct_stale:.2f}%)')
-    ylabel(ax, 'Stamp Delta [ms]'); xlabel(ax, 'Time [sec]')
-    style(ax); legend(ax)
-
-    ax = axs[2, 1]
-    ax.plot(t_axis, stamp_diff_ms, linewidth=1.5, color='C3')
-    title(ax, 'Stamp Delta Full Range')
-    ylabel(ax, 'Stamp Delta [ms]'); xlabel(ax, 'Time [sec]')
-    style(ax)
 
     savefig(fig, out_path)
 
@@ -379,9 +434,11 @@ def pub_plot_combined(a: np.ndarray, m: dict, out_path: Path,
     style(ax); legend(ax)
 
     ax = axs[2, 1]
-    ax.plot(t_axis, stamp_diff_ms, linewidth=1.5, color='C3')
-    title(ax, f'{m["label"]}  Stamp Delta Full Range')
-    ylabel(ax, 'Stamp Delta [ms]'); xlabel(ax, 'Time [sec]')
+    t_pub_all_ns  = a['t_pub_ns'].astype(np.int64)
+    t_pub_diff_ms = np.diff(t_pub_all_ns) / 1e6
+    ax.plot(t_axis, t_pub_diff_ms, linewidth=1.5, color='C3')
+    title(ax, f'{m["label"]}  t_pub_ns Diff (MONOTONIC_RAW)')
+    ylabel(ax, 'Pub Delta [ms]'); xlabel(ax, 'Time [sec]')
     style(ax)
 
     savefig(fig, out_path)
@@ -428,10 +485,10 @@ def main() -> None:
         process_camera(cam, args.out_dir / 'image', prefix='image')
     if lidar is not None:
         process_pub(lidar, 'LIDAR', 'lidar', args.out_dir / 'lidar',
-                    target_ms=100.0, tol_pct=2.0)
+                    target_ms=LIDAR_TARGET_MS, tol_pct=LIDAR_TOL_PCT)
     if imu is not None:
         process_pub(imu, 'IMU', 'imu', args.out_dir / 'imu',
-                    target_ms=5.0, tol_pct=30.0)
+                    target_ms=IMU_TARGET_MS, tol_pct=IMU_TOL_PCT)
 
     print(f'\nplots saved to {args.out_dir}')
 

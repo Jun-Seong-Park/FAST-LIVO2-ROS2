@@ -66,7 +66,7 @@ class See3cam24cugTrigSd : public rclcpp::Node
     blackbox::image::init(kBlackboxPath);
 
     publisher_ = create_publisher<sensor_msgs::msg::Image>(
-      kTopicName, rclcpp::QoS(rclcpp::KeepLast(60)).best_effort().durability_volatile());
+      kTopicName, rclcpp::QoS(rclcpp::KeepLast(5)).best_effort().durability_volatile());
 
     init_pool();
 
