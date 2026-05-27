@@ -18,6 +18,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
@@ -41,17 +42,24 @@ class See3cam24cugTest : public rclcpp::Node
       sink_(nullptr),
       stop_(false)
   {
+    // 블랙박스 초기화
     blackbox::image::init(blackbox::log_dir() + "/see3cam24cug_sd_image_pub.bin");
-
+    
+    // 발행자 초기화
     publisher_ = create_publisher<sensor_msgs::msg::Image>(
-      "/camera/image", rclcpp::QoS(rclcpp::KeepLast(5)).best_effort().durability_volatile());
+      "/camera/image", rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile());
 
+    // GStreamer 초기화
     gst_init(nullptr, nullptr);
 
+    // HID 초기화 및 트리거 모드 설정
     if (!hid::open_and_init_trigger(cfg::kHidDevice, cfg::kExposureUs,
                                     cfg::kAflMode, hid_fd_, get_logger())) return;
+
+    // GStreamer 파이프라인 초기화
     if (!init_pipeline()) return;
 
+    // 파이프라인 처리 스레드 시작
     pipeline_thread_ = std::thread(&See3cam24cugTest::pipeline_loop, this);
   }
 
@@ -61,16 +69,27 @@ class See3cam24cugTest : public rclcpp::Node
   }
 
  private:
+  // timestamp ssd 공유 경로 결정: $HOME/timeshare 또는 /tmp/timeshare
   static std::string resolve_shared_path() {
     const char* home = std::getenv("HOME");
     return std::string(home && *home ? home : "/tmp") + "/timeshare";
   }
 
+  // GStreamer pipeline 을 parse 하고 PLAYING 상태까지 올린다.
+  //
+  // 입출력 : 인자 없음. 반환 bool — true=정상, false=parse 또는 state 전이 실패.
+  // 소유권 : pipeline_/sink_ 멤버에 소유권 보관. 해제는 shutdown() 가 책임 (set_state(NULL) + gst_object_unref).
+  //          src pad probe 는 pad 내부에 등록되며 별도 제거 안 함 (pipeline 해제 시 자동 해제).
+  // 성능   : 일회성 초기화 (생성자에서 1회 호출). PLAYING 전이는 동기적 — 카메라가 READY 될 때까지 수백 ms 블록 가능.
+  // 재진입 : 재진입 불가. 한 객체당 1회 호출 전제 — 두 번 부르면 이전 pipeline 누수.
+  // null   : 없음 (호출 인자가 없어서).
   bool init_pipeline() {
-    // 포맷·디바이스는 sd 와 동일. appsink 옵션만 gscam2 풍으로 단순화:
-    //   emit-signals=false (pull 모델), sync=false (트리거 모드라 clock 동기 불필요),
-    //   max-buffers/drop 미지정 — gstreamer 기본값에 맡김.
+
+    
+    // pipeline str 종이 크기 1024 byte 설정 (확인 필요)
     char pipe_str[1024];
+
+    // gstreamer 파이프라인 문자열 작성
     std::snprintf(pipe_str, sizeof(pipe_str),
       "v4l2src device=/dev/24cug name=src"
       " ! video/x-raw,format=UYVY,width=1280,height=720,framerate=60/1"
@@ -78,11 +97,19 @@ class See3cam24cugTest : public rclcpp::Node
       " ! video/x-raw,format=BGRx,width=640,height=360"
       " ! videoconvert"
       " ! video/x-raw,format=BGR"
-      " ! appsink name=sink emit-signals=false sync=false"
+      " ! appsink name=sink emit-signals=false sync=false max-buffers=1 drop=true"
       );
 
+    // Gstreamer 파이프라인 에러 체크 및 생성
     GError* err = nullptr;
+    
+    // std::cout << "ptr value:" << static_cast<void*>(err) << "\n";  // ← GError 구조체로 만든 포인터 주소 (nullptr 는 0이다)
+    // std::cout << "ptr addr" << static_cast<void*>(&err) << "\n";  // ← GError 구조체로 만든 err 이라는 텍스트 변수의 주소
+
+    // Gstreamer 파이프라인 생성
     pipeline_ = gst_parse_launch(pipe_str, &err);
+    
+    // Pipeline 오류
     if (!pipeline_ || err) {
       RCLCPP_FATAL(get_logger(), "\033[31m[see3cam24cug_test] GST ... FAIL — parse: %s\033[0m",
                    err ? err->message : "unknown");
@@ -90,48 +117,94 @@ class See3cam24cugTest : public rclcpp::Node
       return false;
     }
 
+    // 
     sink_ = gst_bin_get_by_name(GST_BIN(pipeline_), "sink");
+
+    // [확인 필요]
     if (!sink_) {
       RCLCPP_FATAL(get_logger(), "\033[31m[see3cam24cug_test] GST ... FAIL — no sink\033[0m");
       return false;
     }
-
+    // gstreamer 가 failure 을 반환하면 fatal 로그를 남기고 false 반환
     if (gst_element_set_state(pipeline_, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
       RCLCPP_FATAL(get_logger(), "\033[31m[see3cam24cug_test] GST ... FAIL — PLAYING\033[0m");
       return false;
     }
 
-    // pad probe: v4l2src src pad — DQBUF 완료 직후 mono_raw_ns() 기록 (sd 와 동일).
+    // gst element 에서 src 라는 이름의 요소가 GstElement 객체로 저장되어있는데 이걸 src_elem 이라는 포인터 변수가 주소를 가리키게 저장
     GstElement* src_elem = gst_bin_get_by_name(GST_BIN(pipeline_), "src");
+
     if (src_elem) {
+      // 
       GstPad* src_pad = gst_element_get_static_pad(src_elem, "src");
+
+      //
       if (src_pad) {
+        // ㅇㅇ
         gst_pad_add_probe(src_pad, GST_PAD_PROBE_TYPE_BUFFER,
                           on_v4l2src_push_static, this, nullptr);
+        // ㅇㅇ
         gst_object_unref(src_pad);
       }
+      // ㅇㅇ
       gst_object_unref(src_elem);
     }
-
-
     return true;
   }
 
+  // v4l2src 가 buffer 를 src pad 로 push 할 때마다 호출되는 probe 콜백.
+  // 그 시점의 MONO_RAW 시각을 t_dqbuf_ns_ 에 기록한다 (이후 t_push 로 사용).
+  //
+  // 입출력 : pad·info 미사용 (이름 생략). data 는 등록 시 넘긴 this — nullptr 불가.
+  //          반환은 항상 GST_PAD_PROBE_OK — buffer 를 그대로 통과 (drop/수정 없음).
+  // 소유권 : 새 메모리 할당 없음. data 는 객체 lifetime 이라 해제 책임 없음.
+  // 성능   : hot path (10 Hz 트리거당 1회). clock_gettime(CLOCK_MONOTONIC_RAW) 1회만.
+  // 재진입 : 단일 GStreamer streaming thread 에서만 호출 → 재진입 불가.
+  //          단, t_dqbuf_ns_ 는 다른 thread(pipeline_loop) 가 읽음 — atomic 아님,
+  //          64bit 정렬 가정으로 torn read 거의 없음 (엄밀히는 보장 X).
   static GstPadProbeReturn on_v4l2src_push_static(GstPad*, GstPadProbeInfo*, gpointer data) {
-    static_cast<See3cam24cugTest*>(data)->t_dqbuf_ns_ = blackbox::mono_raw_ns();
+    auto* self = static_cast<See3cam24cugTest*>(data);
+    self->t_dqbuf_ns_ = blackbox::mono_raw_ns();
+    self->n_push_.fetch_add(1, std::memory_order_relaxed);
     return GST_PAD_PROBE_OK;
   }
 
+  // GStreamer pipeline 의 appsink 에서 sample 을 pull 해서 처리하는 루프.
   void pipeline_loop() {
+    // stop_ 플래그가 켜지거나 ROS가 종료될 때까지 루프. 루프당 최대 100 ms 대기하면서 sample 을 pull 한다.
     while (!stop_.load(std::memory_order_relaxed) && rclcpp::ok()) {
+      
+      // 100 ms 대기하면서 sample 을 pull 한다. sample 이 없으면 nullptr 반환 → 루프 계속.
       GstSample* sample = gst_app_sink_try_pull_sample(
         GST_APP_SINK(sink_), 100 * GST_MSECOND);
+      
+        // sample 이 nullptr 이면 pull 실패 또는 timeout → 루프 계속. sample 이 있으면 처리.
       if (!sample) continue;
+
+      // appsink (max-buffers=1, drop=true) 가 버린 frame 수 추정.
+      // pad probe 에서 push 마다 ++n_push_, 여기서 pull 마다 ++n_pull_.
+      // 이번 pull 직전까지 들어온 push 가 1개를 초과하면, 그 초과분이 drop.
+      ++n_pull_;
+      const uint64_t push_now      = n_push_.load(std::memory_order_relaxed);
+      const uint64_t pushed_since  = push_now - last_push_seen_;
+      last_push_seen_ = push_now;
+      if (pushed_since > 1) {
+        const uint64_t drops = pushed_since - 1;
+        total_drops_ += drops;
+        std::cout << "\033[33m[see3cam24cug_test] drop +" << drops
+                  << " total=" << total_drops_
+                  << " (push=" << push_now << " pull=" << n_pull_ << ")\033[0m\n";
+      }
+
+      // sample 을 Image 메시지로 변환 후 발행하는 함수 호출.
       process_sample(sample);
+      
+      // sample 참조 해제. appsink 내부적으로 관리하므로 gst_sample_unref 만 하면 됨 (gst_buffer · gst_caps 등은 appsink 이 관리).
       gst_sample_unref(sample);
     }
   }
 
+  // GstSample* sample 을 받아서 Image 메시지로 변환 후 발행하는 함수.
   void process_sample(GstSample* sample) {
     GstBuffer* buf = gst_sample_get_buffer(sample);
     if (!buf) return;
@@ -153,8 +226,8 @@ class See3cam24cugTest : public rclcpp::Node
       return;
     }
 
-  std::cout << static_cast<void*>(memory)   << "\n";  // ← GstMemory 구조체 주소 (핸들)
-  std::cout << static_cast<void*>(info.data) << "\n";  // ← 실제 BGR 픽셀 시작 주소
+  // std::cout << static_cast<void*>(memory)   << "\n";  // ← GstMemory 구조체 주소 (핸들)
+  // std::cout << static_cast<void*>(info.data) << "\n";  // ← 실제 BGR 픽셀 시작 주소
 
     const size_t expected = static_cast<size_t>(w) * static_cast<size_t>(h) * 3;
     if (info.size < expected) {
@@ -207,6 +280,10 @@ class See3cam24cugTest : public rclcpp::Node
   std::thread       pipeline_thread_;
   std::atomic<bool> stop_;
   uint64_t          t_dqbuf_ns_{0};  // pad probe: mono_raw_ns() at v4l2src push
+  std::atomic<uint64_t> n_push_{0};  // pad probe 호출 누적 = v4l2src 가 push 한 buffer 수
+  uint64_t          n_pull_{0};      // appsink 에서 pull 성공 누적 (단일 thread: pipeline_loop)
+  uint64_t          last_push_seen_{0};
+  uint64_t          total_drops_{0};
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_;
 };
 
