@@ -36,11 +36,6 @@ namespace hid = see3cam::hid;
 
 namespace {
 // SD 전용 ────────────────────────────────────────────
-constexpr int         kCaptureWidth   = 1280;
-constexpr int         kCaptureHeight  = 720;
-constexpr int         kOutputWidth    = 640;
-constexpr int         kOutputHeight   = 360;
-constexpr int         kCaptureFps     = 60;
 constexpr const char* kTopicName      = "/camera/image";
 constexpr const char* kNodeName       = "see3cam24cug_trig_sd";
 constexpr const char* kLogLabel       = "[see3cam24cug_sd]";
@@ -133,16 +128,13 @@ class See3cam24cugTrigSd : public rclcpp::Node
   bool init_pipeline() {
     char pipe_str[1024];
     std::snprintf(pipe_str, sizeof(pipe_str),
-      "v4l2src device=%s name=src"
-      " ! video/x-raw,format=UYVY,width=%d,height=%d,framerate=%d/1"
+      "v4l2src device=/dev/24cug name=src"
+      " ! video/x-raw,format=UYVY,width=1280,height=720,framerate=60/1"
       " ! nvvidconv"
-      " ! video/x-raw,format=BGRx,width=%d,height=%d"
+      " ! video/x-raw,format=BGRx,width=640,height=360"
       " ! videoconvert"
       " ! video/x-raw,format=BGR"
       " ! appsink name=sink emit-signals=true sync=false max-buffers=%d drop=%s",
-      cfg::kDevice,
-      kCaptureWidth, kCaptureHeight, kCaptureFps,
-      kOutputWidth, kOutputHeight,
       appsink_max_buffers_, appsink_drop_ ? "true" : "false");
 
     GError *err = nullptr;

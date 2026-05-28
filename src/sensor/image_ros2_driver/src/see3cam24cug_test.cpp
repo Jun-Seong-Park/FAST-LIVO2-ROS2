@@ -5,7 +5,8 @@
 // vs see3cam24cug_trig_sd.cpp 와의 차이 (의도된 단순화):
 //   - 풀 / q_free / q_ready / condvar / mutex 없음
 //   - cbk(push) 모델 → try_pull_sample(100ms) pull 모델
-//   - 매 프레임 std::make_unique<Image>() · publisher_->publish(std::move(img))
+//   - 재사용 멤버 버퍼 1개 · publisher_->publish(const&) — 별도 프로세스(inter-process)라 publish 가
+//     반환 전 DDS 로 동기 복사를 끝내므로(rclcpp publisher.hpp:456 rcl_publish) 버퍼 1개로 충분
 //   - blackbox · pad probe · ready timer · bus error restart · set/get_trigger 서비스 없음
 
 #include <rclcpp/rclcpp.hpp>
@@ -48,6 +49,11 @@ class See3cam24cugTest : public rclcpp::Node
     // 발행자 초기화
     publisher_ = create_publisher<sensor_msgs::msg::Image>(
       "/camera/image", rclcpp::QoS(rclcpp::KeepLast(1)).best_effort().durability_volatile());
+
+    // 재사용 버퍼의 고정 필드 1회 설정 (가변 필드 stamp/size 는 매 프레임 갱신)
+    msg_.header.frame_id = cfg::kFrameId;
+    msg_.encoding        = "bgr8";
+    msg_.is_bigendian    = 0;
 
     // GStreamer 초기화
     gst_init(nullptr, nullptr);
@@ -204,7 +210,20 @@ class See3cam24cugTest : public rclcpp::Node
     }
   }
 
-  // GstSample* sample 을 받아서 Image 메시지로 변환 후 발행하는 함수.
+  // 재사용 버퍼의 크기 의존 필드(width/height/step/data)를 필요할 때만 갱신.
+  // 크기가 이미 같으면 no-op → resize 재할당 없음.
+  void ensure_size(int w, int h) {
+    const size_t need = static_cast<size_t>(w) * static_cast<size_t>(h) * 3;
+    if (msg_.width  == static_cast<uint32_t>(w) &&
+        msg_.height == static_cast<uint32_t>(h) &&
+        msg_.data.size() == need) return;
+    msg_.width  = static_cast<uint32_t>(w);
+    msg_.height = static_cast<uint32_t>(h);
+    msg_.step   = static_cast<uint32_t>(w * 3);
+    msg_.data.resize(need);
+  }
+
+  // GstSample* sample 을 받아서 재사용 버퍼에 채운 뒤 발행하는 함수.
   void process_sample(GstSample* sample) {
     GstBuffer* buf = gst_sample_get_buffer(sample);
     if (!buf) return;
@@ -239,27 +258,22 @@ class See3cam24cugTest : public rclcpp::Node
     stamper_.try_open();
     const int64_t ns = stamper_.read_low_ns();
 
-    auto img = std::make_unique<sensor_msgs::msg::Image>();
-    img->header.frame_id = cfg::kFrameId;
-    img->header.stamp    = (ns > 0) ? rclcpp::Time(ns, RCL_ROS_TIME) : now();
-    img->width           = static_cast<uint32_t>(w);
-    img->height          = static_cast<uint32_t>(h);
-    img->encoding        = "bgr8";
-    img->is_bigendian    = 0;
-    img->step            = static_cast<uint32_t>(w * 3);
-    img->data.resize(expected);
-    std::memcpy(img->data.data(), info.data, expected);
+    // 재사용 버퍼: 크기 바뀔 때만 size 필드 갱신, 매 프레임 stamp 와 픽셀만 갱신.
+    ensure_size(w, h);
+    msg_.header.stamp = (ns > 0) ? rclcpp::Time(ns, RCL_ROS_TIME) : now();
+    std::memcpy(msg_.data.data(), info.data, expected);
 
     gst_memory_unmap(memory, &info);
     gst_memory_unref(memory);
 
     const uint64_t header_stamp_ns =
-        static_cast<uint64_t>(img->header.stamp.sec) * 1000000000ULL
-      + static_cast<uint64_t>(img->header.stamp.nanosec);
+        static_cast<uint64_t>(msg_.header.stamp.sec) * 1000000000ULL
+      + static_cast<uint64_t>(msg_.header.stamp.nanosec);
     const uint64_t t_push = t_dqbuf_ns_;  // pad probe 기록값 (MONOTONIC_RAW)
     const size_t record_idx = blackbox::image::log_cbk(header_stamp_ns, t_push);
 
-    publisher_->publish(std::move(img));
+    // inter-process 라 publish 가 반환 전 DDS 로 동기 복사를 끝내므로 같은 버퍼를 다음 프레임에 재사용 가능.
+    publisher_->publish(msg_);
     blackbox::image::log_pub(record_idx);
   }
 
@@ -284,6 +298,7 @@ class See3cam24cugTest : public rclcpp::Node
   uint64_t          n_pull_{0};      // appsink 에서 pull 성공 누적 (단일 thread: pipeline_loop)
   uint64_t          last_push_seen_{0};
   uint64_t          total_drops_{0};
+  sensor_msgs::msg::Image msg_;      // 재사용 발행 버퍼 (단일 thread + 동기 publish 라 1개로 충분)
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_;
 };
 

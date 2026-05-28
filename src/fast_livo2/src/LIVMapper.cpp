@@ -360,7 +360,23 @@ void LIVMapper::initializeSubscribersAndPublishers(rclcpp::Node::SharedPtr &node
     sub_pcl = this->node->create_subscription<sensor_msgs::msg::PointCloud2>(lid_topic, sensor_qos, std::bind(&LIVMapper::standard_pcl_cbk, this, std::placeholders::_1));
   }
   sub_imu = this->node->create_subscription<sensor_msgs::msg::Imu>(imu_topic, sensor_qos, std::bind(&LIVMapper::imu_cbk, this, std::placeholders::_1));
-  sub_img = this->node->create_subscription<sensor_msgs::msg::Image>(img_topic, sensor_qos, std::bind(&LIVMapper::img_cbk, this, std::placeholders::_1));
+
+  // image subscriber 에 DDS reader 단 lost-sample 카운터 박기.
+  // SHM/UDP 무관, RTPS sequence gap 으로 rmw 가 인지한 누락만 집계 → drop layer 분리용.
+  rclcpp::SubscriptionOptions img_sub_opts;
+  img_sub_opts.event_callbacks.message_lost_callback =
+      [logger = this->node->get_logger()](rclcpp::QOSMessageLostInfo & info) {
+        RCLCPP_WARN(logger,
+                    "\033[33m[LIVMapper] image message_lost +%lu total=%lu\033[0m",
+                    static_cast<unsigned long>(info.total_count_change),
+                    static_cast<unsigned long>(info.total_count));
+      };
+  sub_img = this->node->create_subscription<sensor_msgs::msg::Image>(
+      img_topic, sensor_qos,
+      std::bind(&LIVMapper::img_cbk, this, std::placeholders::_1, std::placeholders::_2),
+      img_sub_opts);
+  RCLCPP_INFO(this->node->get_logger(),
+              "\033[34m[LIVMapper] image lost-callback registered\033[0m");
   
   pubLaserCloudFullRes = this->node->create_publisher<sensor_msgs::msg::PointCloud2>("/cloud_registered", 100);
   pubNormal = this->node->create_publisher<visualization_msgs::msg::MarkerArray>("/visualization_marker", 100);
@@ -1096,9 +1112,26 @@ cv::Mat LIVMapper::getImageFromMsg(const sensor_msgs::msg::Image::ConstSharedPtr
 }
 
 // static int i = 0;
-void LIVMapper::img_cbk(const sensor_msgs::msg::Image::ConstSharedPtr &msg_in)
+void LIVMapper::img_cbk(const sensor_msgs::msg::Image::ConstSharedPtr &msg_in,
+                        const rclcpp::MessageInfo &info)
 {
   blackbox::sub_image::log(StampNs(msg_in->header.stamp));
+
+  // PSN(publisher RTPS writerSN) gap = publisher 가 send 했는데 이 callback 에 안 들어온 frame 수.
+  // last_img_psn_ == 0 인 첫 진입은 건너뜀 (비교 기준 없음).
+  const uint64_t psn = info.get_rmw_message_info().publication_sequence_number;
+  if (last_img_psn_ != 0 && psn > last_img_psn_ + 1) {
+    const uint64_t gap = psn - last_img_psn_ - 1;
+    img_psn_gap_total_ += gap;
+    RCLCPP_WARN(this->node->get_logger(),
+                "\033[33m[LIVMapper] image PSN gap +%lu total=%lu (psn=%lu prev=%lu)\033[0m",
+                static_cast<unsigned long>(gap),
+                static_cast<unsigned long>(img_psn_gap_total_),
+                static_cast<unsigned long>(psn),
+                static_cast<unsigned long>(last_img_psn_));
+  }
+  last_img_psn_ = psn;
+
   static uint64_t cb_count = 0;
   static double prev_stamp = -1.0;
   cb_count++;

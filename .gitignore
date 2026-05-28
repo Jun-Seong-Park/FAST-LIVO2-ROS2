@@ -7,3 +7,4 @@ trace/log
 trace/notes
 trace/plots
 src/fast_livo2/Log/
+src/blackbox/plots/

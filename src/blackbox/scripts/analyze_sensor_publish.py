@@ -12,7 +12,7 @@ ImagePubRecord (blackbox spec §3.5):
 
 usage:
   python3 analyze_sensor_publish.py
-  python3 analyze_sensor_publish.py --cam-variant hd
+  python3 analyze_sensor_publish.py --resolution hd
   python3 analyze_sensor_publish.py --out-dir /path/to/folder
 """
 import argparse
@@ -461,9 +461,9 @@ def main() -> None:
     log_dir = Path(__file__).resolve().parent.parent / 'log'
     out_dir = Path(__file__).resolve().parent.parent / 'plots'
 
-    p.add_argument('--cam-variant', default='sd',
+    p.add_argument('--resolution', default='sd',
                    choices=['sd', 'hd', 'wuxga', 'wuxga_mjpg'],
-                   help='Camera variant prefix (default: sd)')
+                   help='Camera resolution variant prefix (default: sd)')
     p.add_argument('--cam',     type=Path, default=None,
                    help='Override cam bin path')
     p.add_argument('--lidar',   type=Path, default=log_dir / 'lidar_pubrecord.bin')
@@ -472,7 +472,7 @@ def main() -> None:
     args = p.parse_args()
 
     if args.cam is None:
-        args.cam = log_dir / f'see3cam24cug_{args.cam_variant}_image_pub.bin'
+        args.cam = log_dir / f'see3cam24cug_{args.resolution}_image_pub.bin'
 
     for sub in ('image', 'lidar', 'imu'):
         (args.out_dir / sub).mkdir(parents=True, exist_ok=True)

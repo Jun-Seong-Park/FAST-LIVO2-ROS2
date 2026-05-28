@@ -4,12 +4,14 @@ Publisher vs Subscriber blackbox comparison.
 
 Usage:
   python3 analyze_sensor_compare.py [--stream lidar|imu|image|all]
+                              [--resolution sd|hd|wuxga|wuxga_mjpg]
                               [--dir trace/log] [--out-dir trace/plots]
 
 File pairs:
   lidar : lidar_pubrecord.bin (24B)  vs  lidar_subrecord.bin (24B)
   imu   : imu_pubrecord.bin   (24B)  vs  imu_subrecord.bin   (24B)
-  image : see3cam24cug_sd_image_pub.bin (48B)  vs  image_subrecord.bin (24B)
+  image : see3cam24cug_<resolution>_image_pub.bin (48B)  vs  image_subrecord.bin (24B)
+          (resolution: --resolution, default sd)
 
 Match key: header_stamp
 Plots saved to: <out-dir>/{lidar,imu,image}/{stream}_compare.png
@@ -65,7 +67,7 @@ STREAM_MAP = {
         "fps":      200,
     },
     "image": {
-        "pub_file": "see3cam24cug_sd_image_pub.bin",
+        "pub_file": "see3cam24cug_sd_image_pub.bin",   # default; main() overrides per --resolution
         "sub_file": "image_subrecord.bin",
         "pub_dtype": PUB_IMAGE_48,
         "pub_t_col": "t_pub_ns",
@@ -274,11 +276,17 @@ def compare(stream: str, log_dir: str, out_dir: Path) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--stream", choices=list(STREAM_MAP) + ["all"], default="all")
+    ap.add_argument("--resolution", choices=['sd', 'hd', 'wuxga', 'wuxga_mjpg'],
+                    default='sd',
+                    help="Camera resolution variant prefix for image pub bin (default: sd)")
     default_log = str(Path(__file__).resolve().parent.parent / 'log')
     default_out = str(Path(__file__).resolve().parent.parent / 'plots')
     ap.add_argument("--dir",     default=default_log, help="blackbox log directory")
     ap.add_argument("--out-dir", default=default_out,  help="plot output directory")
     args = ap.parse_args()
+
+    image_pub_file = f"see3cam24cug_{args.resolution}_image_pub.bin"
+    STREAM_MAP["image"]["pub_file"] = image_pub_file
 
     out_dir = Path(args.out_dir)
     streams = list(STREAM_MAP) if args.stream == "all" else [args.stream]

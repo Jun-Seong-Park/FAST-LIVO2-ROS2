@@ -11,8 +11,12 @@ Calls in order:
 Each analyzer takes its own --log-dir / --out-dir. Defaults assume the package
 layout (script_dir/../log, script_dir/../plots).
 
+RESOLUTION (edit below) selects the camera variant and is forwarded to the
+analyzers that read see3cam24cug_<resolution>_image_pub.bin (publish / compare),
+overriding their per-script default. No CLI arg — run with F5 / python3 plot.py.
+
 Usage:
-  python3 plot.py
+  python3 plot.py        # edit RESOLUTION below to pick the variant
 """
 import subprocess
 import sys
@@ -20,22 +24,30 @@ from pathlib import Path
 
 SCRIPTS_DIR = Path(__file__).resolve().parent
 
+# camera variant forwarded to publish/compare — edit here (no CLI arg):
+#   sd | hd | wuxga | wuxga_mjpg
+RESOLUTION = 'hd'
+
+# (script, takes_resolution) — publish/compare read see3cam24cug_<resolution>_image_pub.bin
 SCRIPTS = [
-    'analyze_sensor_publish.py',
-    'analyze_sensor_subscribe.py',
-    'analyze_sensor_compare.py',
-    'analyze_resource.py',
+    ('analyze_sensor_publish.py',   True),
+    ('analyze_sensor_subscribe.py', False),
+    ('analyze_sensor_compare.py',   True),
+    ('analyze_resource.py',         False),
 ]
-    
+
 
 def main() -> int:
-    for name in SCRIPTS:
+    for name, takes_resolution in SCRIPTS:
         path = SCRIPTS_DIR / name
         if not path.is_file():
             print(f'[plot] skip {name} (missing)')
             continue
+        cmd = [sys.executable, str(path)]
+        if takes_resolution:
+            cmd += ['--resolution', RESOLUTION]
         print(f'\n[plot] === {name} ===')
-        rc = subprocess.run([sys.executable, str(path)]).returncode
+        rc = subprocess.run(cmd).returncode
         if rc != 0:
             print(f'[plot] {name} exited {rc}')
             return rc
