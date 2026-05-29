@@ -30,7 +30,7 @@ find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(blackbox REQUIRED)             # publish trace blackbox
 
-# check apr
+# check apr --> 이거 뭔지 확인 필요
 find_package(PkgConfig)
 pkg_check_modules(APR apr-1)
 if (APR_FOUND)

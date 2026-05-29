@@ -1,4 +1,4 @@
-# GStreamer vs 순수 V4L2 캡처 레이턴시 비교 실험
+# GStreamer vs 순수 V4L2 캡처 레이턴시 비교 실험 
 
 **날짜**: 2026-05-18  
 **장치**: See3CAM_24CUG (USB UVC) on Jetson Orin NX (CTI Hadron NGX024)

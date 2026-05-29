@@ -1,0 +1,24 @@
+# See3CAM_24CUG params — config.hpp 의 기본값을 오버라이드.
+# 노드 이름(see3cam24cug_trig) 아래 ros__parameters 로 매칭. launch 의 resolution:= 가 이 값보다 우선.
+# 해상도 숫자는 여기 없음 — resolution 프로파일을 cfg::resolve_profile() 가 픽셀로 푼다.
+see3cam24cug_trig:
+  ros__parameters:
+    # 디바이스 (udev symlink — 포트 바뀌어도 카메라 식별로 잡힘)
+    device:         "/dev/24cug"
+    hid_device:     "/dev/24cug_hid"
+
+    # 해상도 프로파일: sd | hd | fhd | wuxga
+    #   sd    = 캡처 1280x720 → 출력 640x360 (다운스케일)
+    #   hd    = 1280x720  풀프레임
+    #   fhd   = 1920x1080 풀프레임
+    #   wuxga = 1920x1200 풀프레임
+    resolution:     "sd"
+
+    # 노출/트리거
+    exposure_us:    10000    # 10 ms
+    afl_mode:       0        # Auto Frame Length OFF
+    restore_master: false    # shutdown 시 MASTER 복귀 안 함
+
+    # ROS 토픽
+    topic_name:     "/camera/image"
+    frame_id:       "camera_init"

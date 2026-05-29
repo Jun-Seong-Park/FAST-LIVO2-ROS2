@@ -11,47 +11,28 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
-find_package(std_srvs REQUIRED)
 find_package(blackbox REQUIRED)
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0)
 
-function(add_see3cam24cug_trig variant)
-  set(exe see3cam24cug_trig_${variant})
-  add_executable(${exe} src/${exe}.cpp)
-  ament_target_dependencies(${exe} rclcpp sensor_msgs std_srvs)
-  target_include_directories(${exe} PRIVATE
-    include
-    ${GST_INCLUDE_DIRS})
-  target_link_libraries(${exe} ${GST_LIBRARIES} blackbox::blackbox)
-endfunction()
-
-add_see3cam24cug_trig(sd)
-add_see3cam24cug_trig(hd)
-add_see3cam24cug_trig(wuxga)
-add_see3cam24cug_trig(wuxga_mjpg)
-
-# test variant — gscam2-style pull/single-thread (publish drop A/B 비교용).
-# blackbox 는 sd 와 동일 cascade (pad probe → log_cbk → log_pub), std_srvs 미사용.
-add_executable(see3cam24cug_test src/see3cam24cug_test.cpp)
-ament_target_dependencies(see3cam24cug_test rclcpp sensor_msgs)
-target_include_directories(see3cam24cug_test PRIVATE
+# trigger node — element-based GStreamer pipeline (gstream_pipeline.hpp) + pull/single-thread.
+# blackbox: src-pad probe (push) → log_cbk → log_pub cascade.
+add_executable(see3cam24cug_trig src/see3cam24cug_trig.cpp)
+ament_target_dependencies(see3cam24cug_trig rclcpp sensor_msgs)
+target_include_directories(see3cam24cug_trig PRIVATE
   include
   ${GST_INCLUDE_DIRS})
-target_link_libraries(see3cam24cug_test ${GST_LIBRARIES} blackbox::blackbox)
+target_link_libraries(see3cam24cug_trig ${GST_LIBRARIES} blackbox::blackbox)
 
 install(TARGETS
-  see3cam24cug_trig_sd
-  see3cam24cug_trig_hd
-  see3cam24cug_trig_wuxga
-  see3cam24cug_trig_wuxga_mjpg
-  see3cam24cug_test
+  see3cam24cug_trig
   DESTINATION lib/${PROJECT_NAME}
 )
 
 install(DIRECTORY
   launch
+  config
   DESTINATION share/${PROJECT_NAME}
 )
 

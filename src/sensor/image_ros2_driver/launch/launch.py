@@ -10,26 +10,33 @@ from launch_ros.actions import Node
 def generate_launch_description():
     fastdds_xml = os.path.join(
         get_package_share_directory("fast_livo2"), "config", "fastdds_jetson.xml")
-    appsink_buffers = LaunchConfiguration("appsink_buffers")
-    appsink_drop = LaunchConfiguration("appsink_drop")
-    diag_sleep_ms = LaunchConfiguration("diag_sleep_ms")
+
+    driver_share = get_package_share_directory("image_ros2_driver")
+    config_path  = os.path.join(driver_share, "config", "config.yaml")
+
+    # resolution profile selector (default sd). Overrides resolution in config.yaml.
+    resolution_arg = DeclareLaunchArgument(
+        "resolution",
+        default_value="sd",
+        choices=["sd", "hd", "fhd", "wuxga"],
+        description="Camera resolution profile (sd | hd | fhd | wuxga).",
+    )
+    resolution = LaunchConfiguration("resolution")
 
     camera_node = Node(
         package="image_ros2_driver",
-        executable="see3cam24cug_trig_wuxga",
-        name="see3cam24cug_trig_wuxga",
+        executable="see3cam24cug_trig",
+        name="see3cam24cug_trig",
         output="screen",
         emulate_tty=True,
+        parameters=[config_path, {"resolution": resolution}],
     )
 
     return LaunchDescription([
         SetEnvironmentVariable("ROS_LOCALHOST_ONLY", "1"),
         SetEnvironmentVariable("FASTRTPS_DEFAULT_PROFILES_FILE", fastdds_xml),
-        DeclareLaunchArgument("appsink_buffers", default_value="4"),
-        DeclareLaunchArgument("appsink_drop", default_value="true"),
-        DeclareLaunchArgument("diag_sleep_ms", default_value="0"),
-        SetEnvironmentVariable("SEE3CAM_APPSINK_BUFFERS", appsink_buffers),
-        SetEnvironmentVariable("SEE3CAM_APPSINK_DROP", appsink_drop),
-        SetEnvironmentVariable("SEE3CAM_DIAG_SLEEP_MS", diag_sleep_ms),
+        resolution_arg,
         camera_node,
     ])
+
+# ros2 launch image_ros2_driver launch.py resolution:=sd   (sd | hd | fhd | wuxga)
