@@ -7,6 +7,7 @@
 
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/image.hpp>
+#include <sensor_msgs/msg/compressed_image.hpp>
 
 #include <gst/gst.h>
 
@@ -39,33 +40,41 @@ class See3cam24cugTrig : public rclcpp::Node
     // Parameters (config/config.yaml or `resolution:=` launch arg override config.hpp defaults)
     p_ = cfg::load_params(*this);
     RCLCPP_INFO(get_logger(),
-      "[see3cam24cug_trig] profile=%s capture=%dx%d output=%dx%d fps=%d (nominal; trigger ~10Hz)",
+      "[see3cam24cug_trig] profile=%s capture=%dx%d output=%dx%d fps=%d compressed=%s "
+      "(nominal; trigger ~10Hz)",
       p_.resolution.c_str(), p_.res.capture_width, p_.res.capture_height,
-      p_.res.output_width, p_.res.output_height, p_.res.fps);
+      p_.res.output_width, p_.res.output_height, p_.res.fps, p_.compressed ? "true" : "false");
 
     // Blackbox
     blackbox::image::init(blackbox::log_dir() + "/see3cam24cug_trig_image_pub.bin");
 
-    // Publisher
-    publisher_ = create_publisher<sensor_msgs::msg::Image>(
-      p_.topic_name,
-      rclcpp::QoS(rclcpp::KeepLast(5)).best_effort().durability_volatile());
-
-    // Reusable buffer: fixed fields set once (stamp refreshed per frame)
-    msg_.header.frame_id = p_.frame_id;
-    msg_.encoding        = "bgr8";
-    msg_.is_bigendian    = 0;
-    msg_.width  = p_.res.output_width;
-    msg_.height = p_.res.output_height;
-    msg_.step   = p_.res.output_width * 3;
-    msg_.data.resize(p_.expected_size);
+    // Publisher + reusable buffer fixed fields (stamp refreshed per frame). Only the active
+    // format's publisher/buffer is set up; the other stays unused.
+    const rclcpp::QoS qos = rclcpp::QoS(rclcpp::KeepLast(5)).best_effort().durability_volatile();
+    if (p_.compressed) {
+      // CompressedImage: capture-resolution MJPG, variable byte size per frame.
+      cpublisher_ = create_publisher<sensor_msgs::msg::CompressedImage>(
+        p_.topic_name + "/compressed", qos);
+      cmsg_.header.frame_id = p_.frame_id;
+      cmsg_.format          = "jpeg";
+    } else {
+      // raw bgr8 Image: fixed output resolution and byte size.
+      publisher_ = create_publisher<sensor_msgs::msg::Image>(p_.topic_name, qos);
+      msg_.header.frame_id = p_.frame_id;
+      msg_.encoding        = "bgr8";
+      msg_.is_bigendian    = 0;
+      msg_.width  = p_.res.output_width;
+      msg_.height = p_.res.output_height;
+      msg_.step   = p_.res.output_width * 3;
+      msg_.data.resize(p_.expected_size);
+    }
 
     // HID open + external-trigger mode
     if (!hid::open_and_init_trigger(p_.hid_device.c_str(), p_.exposure_us,
                                     p_.afl_mode, hid_fd_, get_logger())) return;
 
     // GStreamer pipeline (element-based build + negotiation in gstream_pipeline.hpp)
-    if (!gst_.start(p_.device, p_.res, get_logger())) return;
+    if (!gst_.start(p_.device, p_.res, p_.compressed, get_logger())) return;
 
     // Pipeline worker thread
     pipeline_thread_ = std::thread(&See3cam24cugTrig::pipeline_loop, this);
@@ -131,32 +140,38 @@ class See3cam24cugTrig : public rclcpp::Node
       return;
     }
 
-    // Size sanity check: negotiated caps fix the frame size, but guard the memcpy source
-    if (info.size < p_.expected_size) {
-      gst_memory_unmap(memory, &info);
-      gst_memory_unref(memory);
-      RCLCPP_WARN(get_logger(), "\033[33m[see3cam24cug_trig] WARN — frame smaller than expected\033[0m");
-      return;
-    }
-
     stamper_.try_open();
     const int64_t ns = stamper_.read_low_ns();
+    const rclcpp::Time stamp = (ns > 0) ? rclcpp::Time(ns, RCL_ROS_TIME) : now();
 
-    msg_.header.stamp = (ns > 0) ? rclcpp::Time(ns, RCL_ROS_TIME) : now();
-    std::memcpy(msg_.data.data(), info.data, p_.expected_size);
+    if (p_.compressed) {
+      // MJPG: variable byte size — copy exactly info.size into the CompressedImage buffer.
+      cmsg_.header.stamp = stamp;
+      cmsg_.data.resize(info.size);
+      std::memcpy(cmsg_.data.data(), info.data, info.size);
+    } else {
+      // raw: negotiated caps fix the frame size, but guard the memcpy source
+      if (info.size < p_.expected_size) {
+        gst_memory_unmap(memory, &info);
+        gst_memory_unref(memory);
+        RCLCPP_WARN(get_logger(), "\033[33m[see3cam24cug_trig] WARN — frame smaller than expected\033[0m");
+        return;
+      }
+      msg_.header.stamp = stamp;
+      std::memcpy(msg_.data.data(), info.data, p_.expected_size);
+    }
 
     gst_memory_unmap(memory, &info);
     gst_memory_unref(memory);
 
-    const uint64_t header_stamp_ns =
-        static_cast<uint64_t>(msg_.header.stamp.sec) * 1000000000ULL
-      + static_cast<uint64_t>(msg_.header.stamp.nanosec);
+    const uint64_t header_stamp_ns = static_cast<uint64_t>(stamp.nanoseconds());
     const uint64_t t_push = gst_.t_push_ns();  // src-pad probe value (MONOTONIC_RAW)
     const size_t record_idx = blackbox::image::log_cbk(header_stamp_ns, t_push);
 
     // inter-process publish finishes the synchronous DDS copy before returning,
     // so the same buffer can be reused for the next frame
-    publisher_->publish(msg_);
+    if (p_.compressed) cpublisher_->publish(cmsg_);
+    else               publisher_->publish(msg_);
     blackbox::image::log_pub(record_idx);
   }
 
@@ -179,8 +194,10 @@ class See3cam24cugTrig : public rclcpp::Node
   uint64_t               n_pull_{0};         // successful pulls (single thread: pipeline_loop)
   uint64_t               last_push_seen_{0};
   uint64_t               total_drops_{0};
-  sensor_msgs::msg::Image msg_;              // reusable publish buffer (single thread + sync publish)
-  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr publisher_;
+  sensor_msgs::msg::Image           msg_;    // reusable raw buffer (compressed=false)
+  sensor_msgs::msg::CompressedImage cmsg_;   // reusable MJPG buffer (compressed=true)
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr           publisher_;   // raw
+  rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr cpublisher_;  // compressed
 };
 
 int main(int argc, char** argv) {

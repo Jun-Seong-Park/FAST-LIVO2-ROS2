@@ -19,6 +19,10 @@ see3cam24cug_trig:
     afl_mode:       0        # Auto Frame Length OFF
     restore_master: false    # shutdown 시 MASTER 복귀 안 함
 
+    # 발행 포맷: false → raw bgr8 Image, true → MJPG CompressedImage (capture 해상도 그대로)
+    #   launch 의 compressed:= 가 이 값보다 우선.
+    compressed:     false
+
     # ROS 토픽
     topic_name:     "/camera/image"
     frame_id:       "camera_init"

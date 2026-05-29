@@ -1,0 +1,21 @@
+econ_ros2_driver:
+  ros__parameters:    
+    # hardware
+    device:         "/dev/24cug" # udev name
+    hid_device:     "/dev/24cug_hid" # udev hid name
+    
+    # local or server
+    fastdds_xml:    "fastdds_unicast.xml" # fastdds_unicast.xml | fastdds_loopback.xml
+    localhost_only:  false     # ROS_LOCALHOST_ONLY    
+    
+    # cam control
+    exposure_us:    10000    # 10 ms
+    afl_mode:       0        # Auto Frame Length OFF : 0, off | 1, on
+    restore_master: false    # shutdown 시 MASTER 복귀 안 함
+    resolution:     "sd" # sd | hd | fhd | wuxga
+    
+    # ros2 topic 
+    topic_name:     "/camera/image" # if compressed, "/camera/image/compressed" 
+    frame_id:       "camera_init"
+    backend:        "gstreamer" # gstreamer | opencv
+    compressed:     false #  true | false

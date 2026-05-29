@@ -3,10 +3,15 @@
 // All GStreamer concerns (build, link, caps negotiation, src-pad probe, bus, pull, teardown)
 // live here so the ROS node only orchestrates: pull → stamp → publish.
 //
-// Pipeline:  v4l2src ─ capsfilter(UYVY WxH @fps) ─ nvvidconv ─ capsfilter(BGRx WxH)
-//                    ─ videoconvert ─ capsfilter(BGR) ─ appsink
+// Raw path (compressed=false):
+//   v4l2src ─ capsfilter(UYVY WxH @fps) ─ nvvidconv ─ capsfilter(BGRx WxH)
+//           ─ videoconvert ─ capsfilter(BGR) ─ appsink
 //   - capsfilters pin every negotiation boundary → deterministic caps (no fuzzy auto-negotiation)
 //   - sd downscales at nvvidconv (capture != output); hd/fhd/wuxga pass through full-frame
+// Compressed path (compressed=true):
+//   v4l2src ─ capsfilter(image/jpeg, capture WxH @fps) ─ appsink
+//   - camera emits MJPG over V4L2 → v4l2src delivers image/jpeg directly (no encoder)
+//   - JPEG is not rescalable in-stream → capture resolution as-is (output/downscale ignored)
 //   - fps in capture caps is nominal — trigger-mode effective rate is the external trigger (~10 Hz)
 //
 // Push-side observation (t_push, n_push) is a GStreamer-side fact, so it is owned here and exposed
@@ -36,20 +41,17 @@ class GstCameraPipeline {
   GstCameraPipeline& operator=(const GstCameraPipeline&) = delete;
 
   // Build element pipeline for device + resolution, negotiate caps, set PLAYING.
+  // compressed selects the chain (raw BGR vs MJPG image/jpeg) between v4l2src and appsink.
   // Returns false on any factory/link/state failure (logs FATAL).
-  bool start(const std::string& device, const Resolution& res, rclcpp::Logger logger) {
+  bool start(const std::string& device, const Resolution& res, bool compressed,
+             rclcpp::Logger logger) {
     gst_init(nullptr, nullptr);  // idempotent — safe to call repeatedly
 
     pipeline_ = gst_pipeline_new("see3cam_pipeline");
-    GstElement* src      = gst_element_factory_make("v4l2src",      "src");
-    GstElement* caps_cap = gst_element_factory_make("capsfilter",   "caps_capture");
-    GstElement* nvconv   = gst_element_factory_make("nvvidconv",    "nvconv");
-    GstElement* caps_out = gst_element_factory_make("capsfilter",   "caps_output");
-    GstElement* vidconv  = gst_element_factory_make("videoconvert", "vidconv");
-    GstElement* caps_bgr = gst_element_factory_make("capsfilter",   "caps_bgr");
-    GstElement* sink     = gst_element_factory_make("appsink",      "sink");
+    GstElement* src  = gst_element_factory_make("v4l2src", "src");
+    GstElement* sink = gst_element_factory_make("appsink", "sink");
 
-    if (!pipeline_ || !src || !caps_cap || !nvconv || !caps_out || !vidconv || !caps_bgr || !sink) {
+    if (!pipeline_ || !src || !sink) {
       RCLCPP_FATAL(logger, "\033[31m[gst] element factory failed (missing plugin?)\033[0m");
       return false;
     }
@@ -57,43 +59,14 @@ class GstCameraPipeline {
     // v4l2 source device
     g_object_set(src, "device", device.c_str(), nullptr);
 
-    // Capture caps: UYVY capture WxH @ fps (fps nominal — trigger effective ~10 Hz)
-    GstCaps* c_capture = gst_caps_new_simple(
-      "video/x-raw",
-      "format",    G_TYPE_STRING,     "UYVY",
-      "width",     G_TYPE_INT,        res.capture_width,
-      "height",    G_TYPE_INT,        res.capture_height,
-      "framerate", GST_TYPE_FRACTION, res.fps, 1,
-      nullptr);
-    g_object_set(caps_cap, "caps", c_capture, nullptr);
-    gst_caps_unref(c_capture);
-
-    // nvvidconv output: BGRx output WxH (downscale happens here when output != capture)
-    GstCaps* c_output = gst_caps_new_simple(
-      "video/x-raw",
-      "format", G_TYPE_STRING, "BGRx",
-      "width",  G_TYPE_INT,    res.output_width,
-      "height", G_TYPE_INT,    res.output_height,
-      nullptr);
-    g_object_set(caps_out, "caps", c_output, nullptr);
-    gst_caps_unref(c_output);
-
-    // Final: BGR (node memcpy's this into sensor_msgs::Image bgr8)
-    GstCaps* c_bgr = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "BGR", nullptr);
-    g_object_set(caps_bgr, "caps", c_bgr, nullptr);
-    gst_caps_unref(c_bgr);
-
     // appsink: no signals (we pull), no clock sync, keep newest buffer only
     g_object_set(sink, "emit-signals", FALSE, "sync", FALSE,
                  "max-buffers", 1, "drop", TRUE, nullptr);
     sink_ = GST_APP_SINK(sink);
 
-    gst_bin_add_many(GST_BIN(pipeline_),
-                     src, caps_cap, nvconv, caps_out, vidconv, caps_bgr, sink, nullptr);
-    if (!gst_element_link_many(src, caps_cap, nvconv, caps_out, vidconv, caps_bgr, sink, nullptr)) {
-      RCLCPP_FATAL(logger, "\033[31m[gst] link failed (caps negotiation)\033[0m");
-      return false;
-    }
+    const bool linked = compressed ? build_jpeg_chain(src, sink, res, logger)
+                                   : build_raw_chain(src, sink, res, logger);
+    if (!linked) return false;
 
     // src-pad probe: stamp MONO_RAW at each v4l2src push (push-side timing)
     GstPad* src_pad = gst_element_get_static_pad(src, "src");
@@ -149,6 +122,84 @@ class GstCameraPipeline {
   }
 
  private:
+  // Raw chain: UYVY capture → nvvidconv (downscale when output != capture) → BGR → appsink.
+  bool build_raw_chain(GstElement* src, GstElement* sink, const Resolution& res,
+                       rclcpp::Logger logger) {
+    GstElement* caps_cap = gst_element_factory_make("capsfilter",   "caps_capture");
+    GstElement* nvconv   = gst_element_factory_make("nvvidconv",    "nvconv");
+    GstElement* caps_out = gst_element_factory_make("capsfilter",   "caps_output");
+    GstElement* vidconv  = gst_element_factory_make("videoconvert", "vidconv");
+    GstElement* caps_bgr = gst_element_factory_make("capsfilter",   "caps_bgr");
+
+    if (!caps_cap || !nvconv || !caps_out || !vidconv || !caps_bgr) {
+      RCLCPP_FATAL(logger, "\033[31m[gst] raw chain factory failed (missing plugin?)\033[0m");
+      return false;
+    }
+
+    // Capture caps: UYVY capture WxH @ fps (fps nominal — trigger effective ~10 Hz)
+    GstCaps* c_capture = gst_caps_new_simple(
+      "video/x-raw",
+      "format",    G_TYPE_STRING,     "UYVY",
+      "width",     G_TYPE_INT,        res.capture_width,
+      "height",    G_TYPE_INT,        res.capture_height,
+      "framerate", GST_TYPE_FRACTION, res.fps, 1,
+      nullptr);
+    g_object_set(caps_cap, "caps", c_capture, nullptr);
+    gst_caps_unref(c_capture);
+
+    // nvvidconv output: BGRx output WxH (downscale happens here when output != capture)
+    GstCaps* c_output = gst_caps_new_simple(
+      "video/x-raw",
+      "format", G_TYPE_STRING, "BGRx",
+      "width",  G_TYPE_INT,    res.output_width,
+      "height", G_TYPE_INT,    res.output_height,
+      nullptr);
+    g_object_set(caps_out, "caps", c_output, nullptr);
+    gst_caps_unref(c_output);
+
+    // Final: BGR (node memcpy's this into sensor_msgs::Image bgr8)
+    GstCaps* c_bgr = gst_caps_new_simple("video/x-raw", "format", G_TYPE_STRING, "BGR", nullptr);
+    g_object_set(caps_bgr, "caps", c_bgr, nullptr);
+    gst_caps_unref(c_bgr);
+
+    gst_bin_add_many(GST_BIN(pipeline_),
+                     src, caps_cap, nvconv, caps_out, vidconv, caps_bgr, sink, nullptr);
+    if (!gst_element_link_many(src, caps_cap, nvconv, caps_out, vidconv, caps_bgr, sink, nullptr)) {
+      RCLCPP_FATAL(logger, "\033[31m[gst] raw chain link failed (caps negotiation)\033[0m");
+      return false;
+    }
+    return true;
+  }
+
+  // Compressed chain: camera MJPG → v4l2src image/jpeg → appsink (no encoder, no rescale).
+  bool build_jpeg_chain(GstElement* src, GstElement* sink, const Resolution& res,
+                        rclcpp::Logger logger) {
+    GstElement* caps_jpeg = gst_element_factory_make("capsfilter", "caps_jpeg");
+
+    if (!caps_jpeg) {
+      RCLCPP_FATAL(logger, "\033[31m[gst] jpeg chain factory failed (missing plugin?)\033[0m");
+      return false;
+    }
+
+    // image/jpeg at capture WxH @ fps — fps must be an MJPG-supported rate for this resolution
+    // (See3CAM_24CUG: 1280x720 / 1920x1080 @ 60, 1920x1200 @ 60). fps nominal under trigger mode.
+    GstCaps* c_jpeg = gst_caps_new_simple(
+      "image/jpeg",
+      "width",     G_TYPE_INT,        res.capture_width,
+      "height",    G_TYPE_INT,        res.capture_height,
+      "framerate", GST_TYPE_FRACTION, res.fps, 1,
+      nullptr);
+    g_object_set(caps_jpeg, "caps", c_jpeg, nullptr);
+    gst_caps_unref(c_jpeg);
+
+    gst_bin_add_many(GST_BIN(pipeline_), src, caps_jpeg, sink, nullptr);
+    if (!gst_element_link_many(src, caps_jpeg, sink, nullptr)) {
+      RCLCPP_FATAL(logger, "\033[31m[gst] jpeg chain link failed (caps negotiation)\033[0m");
+      return false;
+    }
+    return true;
+  }
+
   // Buffer probe on v4l2src src pad: one clock read per push, buffer passes through unmodified.
   static GstPadProbeReturn on_src_push(GstPad*, GstPadProbeInfo*, gpointer data) {
     auto* self = static_cast<GstCameraPipeline*>(data);

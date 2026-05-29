@@ -18,6 +18,9 @@ namespace see3cam {
 inline constexpr const char* kDevice    = "/dev/24cug";
 inline constexpr const char* kHidDevice = "/dev/24cug_hid";
 
+// 캡처 backend (Jetson 전용 — gstreamer 는 nvvidconv HW 경로)
+inline constexpr const char* kBackend  = "gstreamer";  // gstreamer | opencv
+
 // 해상도 프로파일 (sd | hd | fhd | wuxga). 실제 픽셀은 resolve_profile() 참조.
 inline constexpr const char* kResolution = "sd";
 
@@ -60,6 +63,7 @@ inline Resolution resolve_profile(const std::string& profile) {
 struct Params {
   std::string device;          // udev symlink (캡처)
   std::string hid_device;      // udev symlink (HID 제어)
+  std::string backend;         // gstreamer | v4l2_opencv
   std::string resolution;      // 프로파일 문자열 (sd | hd | fhd | wuxga)
   Resolution  res;             // resolution 을 resolve_profile() 로 푼 결과
   size_t      expected_size;   // 파생값 — output_width * output_height * 3 (BGR 3ch)
@@ -77,6 +81,7 @@ inline Params load_params(rclcpp::Node& node) {
   Params p;
   p.device         = node.declare_parameter<std::string>("device",      kDevice);
   p.hid_device     = node.declare_parameter<std::string>("hid_device",  kHidDevice);
+  p.backend        = node.declare_parameter<std::string>("backend",     kBackend);
   p.resolution     = node.declare_parameter<std::string>("resolution",  kResolution);
   p.exposure_us    = node.declare_parameter<int>("exposure_us",         kExposureUs);
   p.afl_mode       = static_cast<uint8_t>(node.declare_parameter<int>("afl_mode", kAflMode));

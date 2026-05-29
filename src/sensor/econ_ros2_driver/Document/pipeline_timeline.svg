@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1700" height="440" xmlns="http://www.w3.org/2000/svg"
+     font-family="'Courier New', Courier, monospace">
+
+  <defs>
+    <!-- Hatch patterns -->
+    <pattern id="hatch-red" width="12" height="12"
+             patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="12" stroke="#cc5555" stroke-width="2.5"/>
+    </pattern>
+    <pattern id="hatch-orange" width="12" height="12"
+             patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <line x1="0" y1="0" x2="0" y2="12" stroke="#cc7733" stroke-width="2.5"/>
+    </pattern>
+    <!-- Clip paths: keep hatch inside each box -->
+    <clipPath id="clip-exp">
+      <rect x="80" y="90" width="190" height="76"/>
+    </clipPath>
+    <clipPath id="clip-ro">
+      <rect x="270" y="90" width="100" height="76"/>
+    </clipPath>
+  </defs>
+
+  <!-- ── Background ─────────────────────────────────────── -->
+  <rect width="1700" height="440" fill="white"/>
+
+  <!-- ── Title ─────────────────────────────────────────── -->
+  <text x="850" y="34" text-anchor="middle"
+        font-size="17" font-weight="bold" fill="#111">
+    Camera Pipeline  —  Exposure Start  →  ROS2 Publish
+  </text>
+  <text x="850" y="55" text-anchor="middle" font-size="11" fill="#666">
+    See3CAM_24CUG  ·  UYVY  ·  HD 1280×720  ·  hwtimestamps=0
+  </text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!--  SEGMENT LAYOUT  (y=90, h=76)
+        Exposure  : x=80   w=190  → 270
+        Readout   : x=270  w=100  → 370
+        USB       : x=370  w=500  → 870
+        GST       : x=870  w=430  → 1300
+        cbk→pub   : x=1300 w=220  → 1520
+  ═══════════════════════════════════════════════════ -->
+
+  <!-- Seg 1  Exposure (unknown, ❌) -->
+  <rect x="80" y="90" width="190" height="76"
+        fill="#ffd6d6" stroke="#cc0000" stroke-width="1.4"/>
+  <rect x="80" y="90" width="190" height="76"
+        fill="url(#hatch-red)" clip-path="url(#clip-exp)"/>
+  <text x="175" y="121" text-anchor="middle"
+        font-size="12" font-weight="bold" fill="#800000">Exposure Time</text>
+  <text x="175" y="139" text-anchor="middle"
+        font-size="11" fill="#800000">( ? ms )</text>
+  <text x="175" y="157" text-anchor="middle"
+        font-size="10" fill="#aa0000">❌ not measurable</text>
+
+  <!-- Seg 2  Sensor Readout (unknown, ❌) -->
+  <rect x="270" y="90" width="100" height="76"
+        fill="#ffe0cc" stroke="#cc6600" stroke-width="1.4"/>
+  <rect x="270" y="90" width="100" height="76"
+        fill="url(#hatch-orange)" clip-path="url(#clip-ro)"/>
+  <text x="320" y="121" text-anchor="middle"
+        font-size="10" font-weight="bold" fill="#804000">Sensor</text>
+  <text x="320" y="137" text-anchor="middle"
+        font-size="10" fill="#804000">Readout</text>
+  <text x="320" y="155" text-anchor="middle"
+        font-size="9" fill="#aa4400">❌ N/A</text>
+
+  <!-- Seg 3  USB Transfer (⚠ one-time) -->
+  <rect x="370" y="90" width="500" height="76"
+        fill="#fff3cd" stroke="#cc9900" stroke-width="1.4"/>
+  <text x="620" y="115" text-anchor="middle"
+        font-size="13" font-weight="bold" fill="#664400">USB Isochronous Transfer</text>
+  <text x="620" y="133" text-anchor="middle"
+        font-size="11" fill="#664400">HD ≈ 11.37 ms  |  WUXGA ≈ 16.94 ms</text>
+  <text x="620" y="152" text-anchor="middle"
+        font-size="10" fill="#886600">⚠ measured once:  v4l2_tester  A = t_dqbuf − PTS  [MONOTONIC]</text>
+
+  <!-- Seg 4  GStreamer Processing (✓ RAW) -->
+  <rect x="870" y="90" width="430" height="76"
+        fill="#d4edda" stroke="#1a7a30" stroke-width="1.4"/>
+  <text x="1085" y="114" text-anchor="middle"
+        font-size="13" font-weight="bold" fill="#145a22">GStreamer Processing</text>
+  <text x="1085" y="131" text-anchor="middle"
+        font-size="11" fill="#145a22">nvvidconv  +  videoconvert</text>
+  <text x="1085" y="148" text-anchor="middle"
+        font-size="10" fill="#1a7a30">t_cbk_ns − t_v4l2push_raw  [MONOTONIC_RAW]  ✓</text>
+
+  <!-- Seg 5  cbk → pub (✓ RAW)  — arrow on single line -->
+  <rect x="1300" y="90" width="220" height="76"
+        fill="#cce5ff" stroke="#004085" stroke-width="1.4"/>
+  <text x="1410" y="118" text-anchor="middle"
+        font-size="12" font-weight="bold" fill="#002060">cbk → pub</text>
+  <text x="1410" y="137" text-anchor="middle"
+        font-size="10" fill="#003080">t_pub_ns − t_cbk_ns</text>
+  <text x="1410" y="154" text-anchor="middle"
+        font-size="10" fill="#1a4fa0">[MONOTONIC_RAW]  ✓</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!--  TIMESTAMP MARKER LINES  (y=80 → y=240)            -->
+  <!--  PTS=370  t_v4l2push=870  t_cbk=1300  t_pub=1520   -->
+  <!-- ═══════════════════════════════════════════════════ -->
+
+  <!-- PTS  x=370 -->
+  <line x1="370" y1="80" x2="370" y2="240"
+        stroke="#cc9900" stroke-width="2" stroke-dasharray="5,4"/>
+  <polygon points="370,166 363,182 377,182" fill="#cc9900"/>
+
+  <!-- t_v4l2push_raw  x=870 -->
+  <line x1="870" y1="80" x2="870" y2="240"
+        stroke="#1a7a30" stroke-width="2" stroke-dasharray="5,4"/>
+  <polygon points="870,166 863,182 877,182" fill="#1a7a30"/>
+
+  <!-- t_cbk_ns  x=1300 -->
+  <line x1="1300" y1="80" x2="1300" y2="240"
+        stroke="#1a4fa0" stroke-width="2" stroke-dasharray="5,4"/>
+  <polygon points="1300,166 1293,182 1307,182" fill="#1a4fa0"/>
+
+  <!-- t_pub_ns  x=1520 -->
+  <line x1="1520" y1="80" x2="1520" y2="240"
+        stroke="#003399" stroke-width="2" stroke-dasharray="5,4"/>
+  <polygon points="1520,166 1513,182 1527,182" fill="#003399"/>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!--  LABELS BELOW MARKERS                               -->
+  <!--  PTS: center=370   t_push: center=870               -->
+  <!--  t_cbk: center=1300  t_pub: center=1520             -->
+  <!-- ═══════════════════════════════════════════════════ -->
+
+  <!-- PTS labels -->
+  <text x="370" y="258" text-anchor="middle"
+        font-size="11" font-weight="bold" fill="#664400">PTS</text>
+  <text x="370" y="273" text-anchor="middle"
+        font-size="9" fill="#664400">BUFFER_PTS</text>
+  <text x="370" y="288" text-anchor="middle"
+        font-size="9" fill="#664400">GST_BUFFER_PTS(buf)</text>
+  <text x="370" y="303" text-anchor="middle"
+        font-size="9" fill="#886600">first URB arrived</text>
+  <text x="370" y="318" text-anchor="middle"
+        font-size="9" fill="#555">[CLOCK_MONOTONIC]</text>
+  <text x="370" y="333" text-anchor="middle"
+        font-size="10" fill="#cc4400">⚠ flag=SOE  (misleading)</text>
+
+  <!-- t_v4l2push_raw labels -->
+  <text x="870" y="258" text-anchor="middle"
+        font-size="11" font-weight="bold" fill="#145a22">t_v4l2push_raw</text>
+  <text x="870" y="273" text-anchor="middle"
+        font-size="9" fill="#145a22">pad probe on v4l2src src pad</text>
+  <text x="870" y="288" text-anchor="middle"
+        font-size="9" fill="#145a22">blackbox::mono_raw_ns()</text>
+  <text x="870" y="303" text-anchor="middle"
+        font-size="9" fill="#1a7a30">DQBUF complete, pipeline entry</text>
+  <text x="870" y="318" text-anchor="middle"
+        font-size="9" fill="#555">[CLOCK_MONOTONIC_RAW]</text>
+  <text x="870" y="333" text-anchor="middle"
+        font-size="10" fill="#1a7a30">✓ NEW  (pad probe)</text>
+
+  <!-- t_cbk_ns labels  (center=1300, range ~1170-1430) -->
+  <text x="1300" y="258" text-anchor="middle"
+        font-size="11" font-weight="bold" fill="#002060">t_cbk_ns</text>
+  <text x="1300" y="273" text-anchor="middle"
+        font-size="9" fill="#002060">on_new_sample()</text>
+  <text x="1300" y="288" text-anchor="middle"
+        font-size="9" fill="#002060">blackbox::mono_raw_ns()</text>
+  <text x="1300" y="303" text-anchor="middle"
+        font-size="9" fill="#1a4fa0">appsink callback fired</text>
+  <text x="1300" y="318" text-anchor="middle"
+        font-size="9" fill="#555">[CLOCK_MONOTONIC_RAW]</text>
+  <text x="1300" y="333" text-anchor="middle"
+        font-size="10" fill="#1a4fa0">✓ existing</text>
+
+  <!-- t_pub_ns labels  (center=1520, range ~1400-1640) -->
+  <text x="1520" y="258" text-anchor="middle"
+        font-size="11" font-weight="bold" fill="#002060">t_pub_ns</text>
+  <text x="1520" y="273" text-anchor="middle"
+        font-size="9" fill="#002060">log_pub()</text>
+  <text x="1520" y="288" text-anchor="middle"
+        font-size="9" fill="#002060">blackbox::mono_raw_ns()</text>
+  <text x="1520" y="303" text-anchor="middle"
+        font-size="9" fill="#003399">ROS2 publisher_->publish()</text>
+  <text x="1520" y="318" text-anchor="middle"
+        font-size="9" fill="#555">[CLOCK_MONOTONIC_RAW]</text>
+  <text x="1520" y="333" text-anchor="middle"
+        font-size="10" fill="#1a4fa0">✓ existing</text>
+
+  <!-- ═══════════════════════════════════════════════════ -->
+  <!--  LEGEND                                             -->
+  <!-- ═══════════════════════════════════════════════════ -->
+  <line x1="80" y1="358" x2="1620" y2="358" stroke="#ddd" stroke-width="1"/>
+
+  <rect x="80"  y="368" width="14" height="14" fill="#ffd6d6" stroke="#cc0000" stroke-width="1"/>
+  <rect x="80"  y="368" width="14" height="14" fill="url(#hatch-red)"/>
+  <text x="100" y="380" font-size="11" fill="#444">❌  Not measurable  (camera firmware does not support hwtimestamps)</text>
+
+  <rect x="560" y="368" width="14" height="14" fill="#fff3cd" stroke="#cc9900" stroke-width="1"/>
+  <text x="580" y="380" font-size="11" fill="#444">⚠  One-time only  (MONOTONIC, v4l2_tester)</text>
+
+  <rect x="950" y="368" width="14" height="14" fill="#d4edda" stroke="#1a7a30" stroke-width="1"/>
+  <text x="970" y="380" font-size="11" fill="#444">✓  Continuous blackbox  (MONOTONIC_RAW)</text>
+
+  <!-- bottom record layout -->
+  <line x1="80" y1="400" x2="1620" y2="400" stroke="#eee" stroke-width="1"/>
+  <text x="850" y="418" text-anchor="middle" font-size="9" fill="#aaa">
+    ImagePubRecord (48B):  seq(8)  |  header_stamp(8)  |  t_v4l2push_raw(8)  |  t_cbk_ns(8)  |  t_pub_ns(8)  |  gst_done(1)  |  ros_done(1)  |  pad(6)
+  </text>
+
+</svg>
