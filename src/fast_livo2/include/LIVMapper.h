@@ -13,6 +13,8 @@ which is included as part of this source code package.
 #ifndef LIV_MAPPER_H
 #define LIV_MAPPER_H
 
+#include <deque>
+#include "common_lib.h"
 #include "IMU_Processing.h"
 #include "vio.h"
 #include "preprocess.h"
@@ -125,11 +127,11 @@ public:
   double plot_time;
   int frame_cnt;
   double img_time_offset = 0.0;
-  deque<PointCloudXYZI::Ptr> lid_raw_data_buffer;
-  deque<double> lid_header_time_buffer;
-  deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu_buffer;
-  deque<cv::Mat> img_buffer;
-  deque<double> img_time_buffer;
+  std::deque<PointCloudXYZI::Ptr> lid_raw_data_buffer;
+  std::deque<double> lid_header_time_buffer;
+  std::deque<sensor_msgs::msg::Imu::ConstSharedPtr> imu_buffer;
+  std::deque<cv::Mat> img_buffer;
+  std::deque<double> img_time_buffer;
   vector<pointWithVar> _pv_list;
   vector<double> extrinT;
   vector<double> extrinR;

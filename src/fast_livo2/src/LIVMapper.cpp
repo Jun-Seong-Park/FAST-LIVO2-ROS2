@@ -714,15 +714,16 @@ void LIVMapper::savePCD()
   }
 }
 
+
 void LIVMapper::run(rclcpp::Node::SharedPtr &node) 
 {
-  rclcpp::Rate rate(5000);
-  while (rclcpp::ok()) 
+  rclcpp::Rate rate(5000); /// 5000 Hz 
+  while (rclcpp::ok()) /// while (true)
   {
-    rclcpp::spin_some(this->node);
-    if (!sync_packages(LidarMeasures)) 
+    rclcpp::spin_some(this->node); /// Process incoming messages and execute callbacks
+    if (!sync_packages(LidarMeasures)) /// Check if the necessary data packages are synchronized and ready for processing
     {
-      rate.sleep();
+      rate.sleep(); // sleep for busy-wait if data is not ready, then
       continue;
     }
     handleFirstFrame();
@@ -1194,9 +1195,11 @@ void LIVMapper::img_cbk(const sensor_msgs::msg::Image::ConstSharedPtr &msg_in,
 
   double img_time_correct = msg_header_time; // last_timestamp_lidar + 0.105;
 
-  if (img_time_correct - last_timestamp_img < 0.02)
+  if (img_time_correct - last_timestamp_img < 0.05)
   {
-    RCLCPP_WARN(this->node->get_logger(), "[SUB-DROP] image too fast stamp=%.9f last_img=%.9f diff=%.9f", img_time_correct, last_timestamp_img, img_time_correct - last_timestamp_img);
+    RCLCPP_WARN(this->node->get_logger(), 
+    "[SUB-DROP] image stamp too fast=%.9f last_img=%.9f diff=%.9f", 
+    img_time_correct, last_timestamp_img, img_time_correct - last_timestamp_img);
     mtx_buffer.unlock();
     sig_buffer.notify_all();
     return;
@@ -1212,16 +1215,17 @@ void LIVMapper::img_cbk(const sensor_msgs::msg::Image::ConstSharedPtr &msg_in,
     img_time_buffer.pop_front();
   }
 
-  // ROS_INFO("Correct Image time: %.6f", img_time_correct);
-
-  last_timestamp_img = img_time_correct;
-  // cv::imshow("img", img);
-  // cv::waitKey(1);
+  last_timestamp_img = img_time_correct;  
   // cout<<"last_timestamp_img:::"<<last_timestamp_img<<endl;
   mtx_buffer.unlock();
   sig_buffer.notify_all();
 }
 
+/**
+ * @brief LiDAR·IMU·이미지 버퍼에서 ESIKF 한 스텝치 측정 묶음을 시간순으로 잘라낸다.
+ * @param[out] meas 잘라낸 측정 패킷을 채워 넣을 그룹 (LIO/VIO 플래그·IMU·포인트클라우드 포함)
+ * @return 한 스텝치 데이터가 준비되면 true, 버퍼 부족이나 동기화 대기면 false
+ */
 bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
 {
   if (lid_raw_data_buffer.empty() && lidar_en) return false;
@@ -1295,7 +1299,7 @@ bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
       /*** has img topic, but img topic timestamp larger than lidar end time,
        * process lidar topic. After LIO update, the meas.lidar_frame_end_time
        * will be refresh. ***/
-      if (meas.last_lio_update_time < 0.0) meas.last_lio_update_time = lid_header_time_buffer.front();
+      if (meas.last_lio_update_time < 0.0) meas.last_lio_update_time = lid_header_time_buffer.front(); // for the first time, set LIO time to the first lidar header time.
       // printf("[ Data Cut ] wait \n");
       // printf("[ Data Cut ] last_lio_update_time: %lf \n",
       // meas.last_lio_update_time);
@@ -1452,11 +1456,13 @@ bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
 
   default:
   {
-    printf("!! WRONG SLAM TYPE !!");
+    // printf("!! WRONG SLAM TYPE !!"); //[TODO] test before change in RCLCPP logger
+    RCLCPP_FATAL(this->node->get_logger(), "!! WRONG SLAM TYPE !!");
     return false;
   }
   }
-  RCLCPP_ERROR(this->node->get_logger(), "out sync");
+
+  RCLCPP_ERROR(this->node->get_logger(), "out sync"); // [TODO] Dead code, remove after test
 }
 
 void LIVMapper::publish_img_rgb(const image_transport::Publisher &pubImage, VIOManagerPtr vio_manager)

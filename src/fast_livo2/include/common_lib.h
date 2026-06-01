@@ -99,7 +99,7 @@ struct LidarMeasureGroup
     this->pcl_proc_next.reset(new PointCloudXYZI());
     this->measures.clear();
     lidar_scan_index_now = 0;
-    last_lio_update_time = -1.0;
+    last_lio_update_time = -1.0; // [TODO(verify)] Duplicate of the earlier assignment — verify it's redundant before removing.
   };
 };
 
