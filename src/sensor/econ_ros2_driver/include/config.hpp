@@ -54,7 +54,7 @@ struct Resolution {
 inline Resolution resolve_profile(const std::string& profile) {
   if (profile == "hd")    return {1280,  720, 1280,  720, 60};
   if (profile == "fhd")   return {1920, 1080, 1920, 1080, 60};
-  if (profile == "wuxga") return {1920, 1200, 1920, 1200, 55};
+  if (profile == "wuxga") return {1920, 1200, 1920, 1200, 60}; // MJPG 1920x1200 = 60/114 only (55 is UYVY-only → not-negotiated)
   // "sd" 및 그 외 → 기본 sd (캡처 HD, 출력 640x360 다운스케일)
   return {1280, 720, 640, 360, 60};
 }

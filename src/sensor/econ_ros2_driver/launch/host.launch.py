@@ -15,8 +15,8 @@ def generate_launch_description():
 
     monitor = Node(
         package="econ_ros2_driver",
-        executable="image_monitor",
-        name="image_monitor",
+        executable="econ_monitor",
+        name="econ_monitor",
         output="screen",
         emulate_tty=True,
         parameters=[{"topic": "/camera/image/compressed"}],

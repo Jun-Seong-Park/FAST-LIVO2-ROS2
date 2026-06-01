@@ -31,13 +31,16 @@ target_link_libraries(econ_ros2_driver
   ${GST_LIBRARIES}
   ${OpenCV_LIBS})
 
-# PC-side verification subscriber (rate / bandwidth / frame size).
-add_executable(image_monitor src/image_monitor.cpp)
-ament_target_dependencies(image_monitor rclcpp sensor_msgs)
+# PC-side live viewer: JPEG-decode the compressed stream + imshow, logs rate.
+# Launched by host.launch.py.
+add_executable(econ_monitor src/image_viewer.cpp)
+ament_target_dependencies(econ_monitor rclcpp sensor_msgs)
+target_include_directories(econ_monitor PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(econ_monitor ${OpenCV_LIBS})
 
 install(TARGETS
   econ_ros2_driver
-  image_monitor
+  econ_monitor
   DESTINATION lib/${PROJECT_NAME}
 )
 
