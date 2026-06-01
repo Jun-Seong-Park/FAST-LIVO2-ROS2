@@ -31,8 +31,13 @@ target_link_libraries(econ_ros2_driver
   ${GST_LIBRARIES}
   ${OpenCV_LIBS})
 
+# PC-side verification subscriber (rate / bandwidth / frame size).
+add_executable(image_monitor src/image_monitor.cpp)
+ament_target_dependencies(image_monitor rclcpp sensor_msgs)
+
 install(TARGETS
   econ_ros2_driver
+  image_monitor
   DESTINATION lib/${PROJECT_NAME}
 )
 

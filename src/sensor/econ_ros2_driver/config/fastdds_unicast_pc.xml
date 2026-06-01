@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
+  <transport_descriptors>
+    <!-- WiFi LAN UDP: bound to THIS host's LAN IP. Large receive buffer sized for
+         the worst-case WUXGA JPEG frame (~0.9 MB) so a frame's ~14 back-to-back
+         64 KB datagrams never overflow the kernel socket buffer (best_effort). -->
+    <transport_descriptor>
+      <transport_id>udp_lan</transport_id>
+      <type>UDPv4</type>
+      <sendBufferSize>16777216</sendBufferSize>      <!-- 16 MB -->
+      <receiveBufferSize>16777216</receiveBufferSize> <!-- 16 MB (recv side: this host subscribes) -->
+      <interfaceWhiteList>
+        <address>100.88.16.124</address>             <!-- bind only to WiFi LAN, never tailscale0 -->
+      </interfaceWhiteList>
+    </transport_descriptor>
+    <!-- Same-host SHM: ONLY for local participants on the PC. Not used for the
+         remote Jetson->PC path. -->
+    <transport_descriptor>
+      <transport_id>shm_local</transport_id>
+      <type>SHM</type>
+      <segment_size>33554432</segment_size>           <!-- 32 MB -->
+    </transport_descriptor>
+  </transport_descriptors>
+
+  <participant profile_name="lan_peer" is_default_profile="true">
+    <rtps>
+      <userTransports>
+        <transport_id>shm_local</transport_id>
+        <transport_id>udp_lan</transport_id>
+      </userTransports>
+      <useBuiltinTransports>false</useBuiltinTransports>
+      <builtin>
+        <!-- Announce discovery on this host's LAN IP so the Jetson replies here. -->
+        <metatrafficUnicastLocatorList>
+          <locator><udpv4><address>100.88.16.124</address></udpv4></locator>
+        </metatrafficUnicastLocatorList>
+        <!-- Unicast discovery to the Jetson (no multicast over WiFi). -->
+        <initialPeersList>
+          <locator><udpv4><address>100.88.16.123</address></udpv4></locator>
+        </initialPeersList>
+      </builtin>
+    </rtps>
+  </participant>
+</profiles>
+<!-- PC SUBSCRIBER. self=100.88.16.124  peer(Jetson)=100.88.16.123  (WiFi LAN, MTU 1500).
+     REQUIRES Tailscale DOWN on both ends (LAN overlaps Tailscale CGNAT 100.64.0.0/10).
+     Also requires net.core.rmem_max >= 16 MB on the PC, else the 16 MB request is
+     silently clamped:  sudo sysctl -w net.core.rmem_max=33554432 net.core.wmem_max=33554432 -->

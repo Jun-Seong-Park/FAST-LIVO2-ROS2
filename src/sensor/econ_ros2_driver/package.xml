@@ -7,7 +7,7 @@
     econ_ros2_driver provides a ROS2 driver for the see3cam with trigger and master
     on jetson platform and PC.     
   </description>
-  <maintainer email="jsppark2954@aluxonline.com">alux</maintainer>
+  <maintainer email="jspark2954@aluxonline.com">alux</maintainer>
   <license>MIT</license>
   <buildtool_depend>ament_cmake</buildtool_depend>
   <depend>rclcpp</depend>

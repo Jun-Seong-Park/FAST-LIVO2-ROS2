@@ -11,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <cstdlib>
 #include <cstring>
 #include <ctime>
 #include <mutex>
@@ -26,16 +27,21 @@
 namespace blackbox {
 
 // ─────────────────────────────────────────────────────────────
-// Blackbox root: src/blackbox/{log,plots,scripts}  (package-internal)
-//   BLACKBOX_ROOT_DIR is injected by CMakeLists as absolute path to the
-//   package source dir (same pattern as fast_livo2's ROOT_DIR).
+// Blackbox dirs:
+//   log   — runtime output → $HOME/.blackbox/log (machine-local, outside src)
+//   plots, scripts — package-internal assets → src/blackbox/{plots,scripts}
+//     BLACKBOX_ROOT_DIR is injected by CMakeLists as absolute path to the
+//     package source dir (same pattern as fast_livo2's ROOT_DIR).
 // ─────────────────────────────────────────────────────────────
 
 #ifndef BLACKBOX_ROOT_DIR
 #error "BLACKBOX_ROOT_DIR not defined — CMakeLists must inject it via target_compile_definitions"
 #endif
 
-inline std::string log_dir()     { return std::string(BLACKBOX_ROOT_DIR) + "log"; }
+inline std::string log_dir() {
+  const char* home = std::getenv("HOME");
+  return std::string(home && *home ? home : "/tmp") + "/.blackbox/log";
+}
 inline std::string plots_dir()   { return std::string(BLACKBOX_ROOT_DIR) + "plots"; }
 inline std::string scripts_dir() { return std::string(BLACKBOX_ROOT_DIR) + "scripts"; }
 
