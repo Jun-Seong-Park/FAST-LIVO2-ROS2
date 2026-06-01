@@ -1,9 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
   <transport_descriptors>
-    <!-- WiFi LAN UDP: bound to THIS host's LAN IP. Large socket buffers sized for
-         the worst-case WUXGA JPEG frame (~0.9 MB) so a frame's ~14 back-to-back
-         64 KB datagrams never overflow the kernel socket buffer (best_effort). -->
+
     <transport_descriptor>
       <transport_id>udp_lan</transport_id>
       <type>UDPv4</type>
@@ -13,31 +11,57 @@
         <address>100.88.16.123</address>             <!-- bind only to WiFi LAN, never tailscale0 -->
       </interfaceWhiteList>
     </transport_descriptor>
-    <!-- Same-host SHM: ONLY for local subscribers on the Jetson (e.g. fast_livo2).
-         NOT used for Jetson->PC; Fast DDS auto-selects UDP for the remote peer. -->
+   
     <transport_descriptor>
-      <transport_id>shm_local</transport_id>
+      <transport_id>shm_big</transport_id>
       <type>SHM</type>
-      <segment_size>33554432</segment_size>           <!-- 32 MB -->
+      <segment_size>67108864</segment_size>
     </transport_descriptor>
+    
+    <transport_descriptor>
+      <transport_id>udp_loopback</transport_id>
+      <type>UDPv4</type>
+    </transport_descriptor>
+  
   </transport_descriptors>
 
   <participant profile_name="lan_peer" is_default_profile="true">
     <rtps>
       <userTransports>
-        <transport_id>shm_local</transport_id>
+        <transport_id>shm_big</transport_id>
         <transport_id>udp_lan</transport_id>
+        <transport_id>udp_loopback</transport_id>
       </userTransports>
       <useBuiltinTransports>false</useBuiltinTransports>
       <builtin>
         <!-- Announce discovery on this host's LAN IP so the PC replies here. -->
-        <metatrafficUnicastLocatorList>
-          <locator><udpv4><address>100.88.16.123</address></udpv4></locator>
-        </metatrafficUnicastLocatorList>
+          <metatrafficUnicastLocatorList>
+            <locator>
+              <udpv4>
+                <address>100.88.16.123</address>
+              </udpv4>
+            </locator>
+            <locator>
+              <udpv4>
+                <address>127.0.0.1</address>
+              </udpv4>
+            </locator>
+          </metatrafficUnicastLocatorList>
+        
         <!-- Unicast discovery to the PC (no multicast over WiFi). -->
         <initialPeersList>
-          <locator><udpv4><address>100.88.16.124</address></udpv4></locator>
+          <locator>
+            <udpv4>
+              <address>100.88.16.124</address>
+            </udpv4>
+          </locator>
+          <locator>
+            <udpv4>
+              <address>127.0.0.1</address>
+            </udpv4>
+          </locator>
         </initialPeersList>
+
       </builtin>
     </rtps>
   </participant>
