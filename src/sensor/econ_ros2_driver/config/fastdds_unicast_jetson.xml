@@ -5,17 +5,18 @@
     <transport_descriptor>
       <transport_id>udp_lan</transport_id>
       <type>UDPv4</type>
-      <sendBufferSize>16777216</sendBufferSize>      <!-- 16 MB (send side: this host publishes) -->
+      <sendBufferSize>16777216</sendBufferSize>      <!-- 16 MB -->
       <receiveBufferSize>16777216</receiveBufferSize> <!-- 16 MB -->
       <interfaceWhiteList>
-        <address>100.88.16.123</address>             <!-- bind only to WiFi LAN, never tailscale0 -->
+        <address>100.88.16.123</address>
+        <address>127.0.0.1</address>
       </interfaceWhiteList>
     </transport_descriptor>
    
     <transport_descriptor>
       <transport_id>shm_big</transport_id>
       <type>SHM</type>
-      <segment_size>67108864</segment_size>
+      <segment_size>67108864</segment_size> <!-- 64 MB -->
     </transport_descriptor>
     
     <transport_descriptor>
@@ -41,11 +42,7 @@
                 <address>100.88.16.123</address>
               </udpv4>
             </locator>
-            <locator>
-              <udpv4>
-                <address>127.0.0.1</address>
-              </udpv4>
-            </locator>
+
           </metatrafficUnicastLocatorList>
         
         <!-- Unicast discovery to the PC (no multicast over WiFi). -->

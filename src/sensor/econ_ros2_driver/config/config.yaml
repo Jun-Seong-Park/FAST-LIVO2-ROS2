@@ -16,7 +16,7 @@ econ_ros2_driver:
     
     # ros2 topic 
     compressed:     true #  true | false
-    topic_name:     "/camera/image/compressed" # if compressed, "/camera/image/compressed" 
+    topic_name:     "/camera/image" # if compressed, "/camera/image/compressed" 
     frame_id:       "camera_init"
     backend:        "gstreamer" # gstreamer | opencv
     
