@@ -29,9 +29,16 @@ bool GstBackend::start(const Params& p, ImageFormat format, rclcpp::Logger logge
                "max-buffers", 1, "drop", TRUE, nullptr);
   sink_ = GST_APP_SINK(sink);
 
+  if (format == ImageFormat::kJpeg && p.flip_method != 0) {
+    // jpeg 체인은 passthrough(디코더·nvvidconv 없음) → 회전 불가. 무시하고 경고.
+    RCLCPP_WARN(logger_,
+      "\033[33m[gst] flip_method=%d ignored — jpeg passthrough chain cannot rotate\033[0m",
+      p.flip_method);
+  }
+
   const bool linked = (format == ImageFormat::kJpeg)
     ? build_jpeg_chain(src, sink, p.res)
-    : build_raw_chain(src, sink, p.res);
+    : build_raw_chain(src, sink, p);
   if (!linked) return false;
 
   // src-pad probe: stamp MONO_RAW at each v4l2src push (push-side timing)
@@ -85,8 +92,9 @@ void GstBackend::stop() {
 uint64_t GstBackend::push_count()   const { return n_push_.load(std::memory_order_relaxed); }
 uint64_t GstBackend::t_capture_ns() const { return t_push_ns_; }  // 64-bit aligned, torn read unlikely
 
-// Raw chain: UYVY capture → nvvidconv (color + downscale on ISP) → BGRx → videoconvert → BGR.
-bool GstBackend::build_raw_chain(GstElement* src, GstElement* sink, const Resolution& res) {
+// Raw chain: UYVY capture → nvvidconv (color + downscale + rotation on ISP) → BGRx → videoconvert → BGR.
+bool GstBackend::build_raw_chain(GstElement* src, GstElement* sink, const Params& p) {
+  const Resolution& res = p.res;
   GstElement* caps_cap = gst_element_factory_make("capsfilter",   "caps_capture");
   GstElement* nvconv   = gst_element_factory_make("nvvidconv",    "nvconv");
   GstElement* caps_out = gst_element_factory_make("capsfilter",   "caps_output");
@@ -98,13 +106,17 @@ bool GstBackend::build_raw_chain(GstElement* src, GstElement* sink, const Resolu
     return false;
   }
 
+  // 회전 (HW). 0 none / 1 CCW90 / 2 180 / 3 CW90 — config.hpp flip_method.
+  g_object_set(nvconv, "flip-method", p.flip_method, nullptr);
+
   set_caps(caps_cap, make_uyvy_caps(res));
-  // nvvidconv output: BGRx output WxH (downscale happens here when output != capture)
+  // nvvidconv output: BGRx pub WxH. 90° 회전 시 pub 가로·세로가 swap 되어 있으므로
+  // (config.hpp 파생) rotate 후 출력 치수와 정확히 일치한다 (downscale 도 여기서).
   GstCaps* c_output = gst_caps_new_simple(
     "video/x-raw",
     "format", G_TYPE_STRING, "BGRx",
-    "width",  G_TYPE_INT,    res.output_width,
-    "height", G_TYPE_INT,    res.output_height,
+    "width",  G_TYPE_INT,    p.pub_width,
+    "height", G_TYPE_INT,    p.pub_height,
     nullptr);
   set_caps(caps_out, c_output);
   // final BGR (node memcpy's this into sensor_msgs::Image bgr8)

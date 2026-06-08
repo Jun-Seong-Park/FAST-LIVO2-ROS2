@@ -165,10 +165,9 @@ inline bool open_and_init_trigger(
   return true;
 }
 
-inline void close_and_restore(int& fd, bool restore_master, rclcpp::Logger logger)
+inline void close(int& fd)
 {
   if (fd < 0) return;
-  if (restore_master) set_stream_mode(fd, 0x00, 0x00, logger);
   ::close(fd);
   fd = -1;
 }

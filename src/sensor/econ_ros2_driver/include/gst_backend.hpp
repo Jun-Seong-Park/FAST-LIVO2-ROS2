@@ -3,8 +3,9 @@
 // Declaration only; implementation in src/gst_backend.cpp.
 //
 // kRawBgr8:
-//   v4l2src ─ caps(UYVY WxH @fps) ─ nvvidconv ─ caps(BGRx out WxH) ─ videoconvert ─ caps(BGR) ─ appsink
-//     - nvvidconv does color + downscale on the Tegra ISP; sd downscales here, others pass through
+//   v4l2src ─ caps(UYVY WxH @fps) ─ nvvidconv(flip-method) ─ caps(BGRx pub WxH) ─ videoconvert ─ caps(BGR) ─ appsink
+//     - nvvidconv does color + downscale + rotation on the Tegra ISP (HW); sd downscales here, others pass through
+//     - flip_method 90° (1/3) swaps output WxH → caps use pub_width/pub_height (config.hpp 파생)
 // kJpeg:
 //   v4l2src ─ caps(image/jpeg WxH @fps) ─ appsink   (no encoder, no rescale)
 //
@@ -40,7 +41,7 @@ class GstBackend : public CameraBackend {
   uint64_t t_capture_ns() const override;
 
  private:
-  bool build_raw_chain(GstElement* src, GstElement* sink, const Resolution& res);
+  bool build_raw_chain(GstElement* src, GstElement* sink, const Params& p);
   bool build_jpeg_chain(GstElement* src, GstElement* sink, const Resolution& res);
   void drain_bus();
   void discard_sample();

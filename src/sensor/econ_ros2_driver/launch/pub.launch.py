@@ -7,15 +7,18 @@ from launch.actions import SetEnvironmentVariable
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    driver_share = get_package_share_directory("econ_ros2_driver")
-    config_dir   = os.path.join(driver_share, "config")
+    econ_driver_path = get_package_share_directory("econ_ros2_driver")
+    config_dir   = os.path.join(econ_driver_path, "config")
     config_path  = os.path.join(config_dir, "config.yaml")
 
     with open(config_path) as f:
         params = yaml.safe_load(f)["econ_ros2_driver"]["ros__parameters"]
 
-    fastdds_xml    = params["fastdds_xml"]
     localhost_only = params["localhost_only"]
+    jetson_xml = params["fastdds_jetson_xml"]
+    loopback_xml = params["fastdds_loopback_xml"]
+
+    fastdds_xml    = loopback_xml if localhost_only else jetson_xml
 
     fastdds_path  = os.path.join(config_dir, fastdds_xml)
     localhost_env = "1" if localhost_only else "0"

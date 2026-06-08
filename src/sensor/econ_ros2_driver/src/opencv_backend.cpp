@@ -28,6 +28,15 @@ bool V4l2OpencvBackend::start(const Params& p, ImageFormat format, rclcpp::Logge
   need_resize_ = (res_.output_width  != res_.capture_width ||
                   res_.output_height != res_.capture_height);
 
+  // opencv 경로엔 회전 단계가 없다. flip_method 가 켜지면 node 는 pub(swap) 치수로 발행하지만
+  // 버퍼는 회전 안 된 채라 발행 이미지가 깨진다 → 차단(회전이 필요하면 gstreamer backend).
+  if (p.flip_method != 0) {
+    RCLCPP_FATAL(logger_,
+      "\033[31m[v4l2] flip_method=%d unsupported on opencv backend — use backend:=gstreamer\033[0m",
+      p.flip_method);
+    return false;
+  }
+
   fd_ = ::open(p.device.c_str(), O_RDWR);
   if (fd_ < 0) {
     RCLCPP_FATAL(logger_, "\033[31m[v4l2] cannot open %s: %s\033[0m",

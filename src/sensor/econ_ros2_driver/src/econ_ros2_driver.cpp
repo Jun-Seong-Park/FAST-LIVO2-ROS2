@@ -1,7 +1,7 @@
 // econ_ros2_driver — See3CAM_24CUG ROS2 driver node (single entry executable).
-// Owns orchestration only: param load → HID stream-mode init → backend select →
+// Owns orchestration + the publish path: param load → HID stream-mode init → backend select →
 // grab → mmap GPS-epoch stamp → publish (Image bgr8 | CompressedImage jpeg) + blackbox.
-// Capture+convert detail lives in the selected backend (gstreamer | v4l2_opencv);
+// Capture+convert detail lives in the selected backend (gstreamer | opencv);
 // this file never touches V4L2/GStreamer/OpenCV directly.
 //
 // One reusable publish buffer per format: inter-process publish() finishes the synchronous
@@ -39,22 +39,23 @@ class EconRos2Driver : public rclcpp::Node
       hid_fd_(-1),
       stop_(false)
   {
-    // Parameters (config/config.yaml overrides config.hpp defaults)
+    // params
     p_ = cfg::load_params(*this);
     RCLCPP_INFO(get_logger(),
-      "[econ_ros2_driver] backend=%s profile=%s capture=%dx%d output=%dx%d compressed=%s",
+      "backend=%s resolution=%s capture=%dx%d output=%dx%d flip=%d pub=%dx%d compressed=%s",
       p_.backend.c_str(), p_.resolution.c_str(),
       p_.res.capture_width, p_.res.capture_height,
       p_.res.output_width, p_.res.output_height,
+      p_.flip_method, p_.pub_width, p_.pub_height,
       p_.compressed ? "true" : "false");
 
-    // ros2-logger style: fresh ~/.blackbox/log/<ts>-<pid>/ each run (no overwrite)
-    blackbox::image::init(blackbox::session_dir() + "/econ_ros2_driver_image_pub.bin");
+    // blackbox path
+    blackbox::image::init(blackbox::session_dir() + "/econ_ros2_driver_pub.bin");
 
     setup_publisher();
 
-    if (!init_hid())     return;   // HID stream-mode (TRIGGER / MASTER) + exposure
-    if (!init_backend()) return;   // capture+convert pipeline (gstreamer / v4l2_opencv)
+    if (!init_hid())     return;   // HID stream-mode + exposure
+    if (!init_backend()) return;   // capture+convert pipeline (gstreamer / opencv)
 
     grab_thread_ = std::thread(&EconRos2Driver::loop, this);
   }
@@ -66,6 +67,8 @@ class EconRos2Driver : public rclcpp::Node
   }
 
  private:
+  // QoS: best effort
+  const rclcpp::SensorDataQoS qos_ ;
   // mmap file shared with the LiDAR trigger process (GPS-epoch ns timestamp source)
   static std::string resolve_shared_path()
   {
@@ -75,23 +78,22 @@ class EconRos2Driver : public rclcpp::Node
 
   // Only the active format's publisher/buffer is set up; the other stays unused.
   void setup_publisher()
-  {
-    const rclcpp::QoS qos = rclcpp::QoS(rclcpp::KeepLast(5)).best_effort().durability_volatile();
+  {    
     if (p_.compressed) {
       // CompressedImage: capture-resolution MJPG, variable byte size per frame.
       cpublisher_ = create_publisher<sensor_msgs::msg::CompressedImage>(
-        p_.topic_name + "/compressed", qos);
+        p_.topic_name + "/compressed", qos_);
       cmsg_.header.frame_id = p_.frame_id;
       cmsg_.format          = "jpeg";
     } else {
       // raw bgr8 Image: fixed output resolution and byte size.
-      publisher_ = create_publisher<sensor_msgs::msg::Image>(p_.topic_name, qos);
+      publisher_ = create_publisher<sensor_msgs::msg::Image>(p_.topic_name, qos_);
       msg_.header.frame_id = p_.frame_id;
       msg_.encoding        = "bgr8";
       msg_.is_bigendian    = 0;
-      msg_.width  = p_.res.output_width;
-      msg_.height = p_.res.output_height;
-      msg_.step   = p_.res.output_width * 3;
+      msg_.width  = p_.pub_width;            // 회전 반영(90° 시 output_height)
+      msg_.height = p_.pub_height;           // 회전 반영(90° 시 output_width)
+      msg_.step   = p_.pub_width * 3;
       msg_.data.resize(p_.expected_size);
     }
   }
@@ -100,7 +102,7 @@ class EconRos2Driver : public rclcpp::Node
   bool init_hid()
   {
     return hid::open_and_init_trigger(p_.hid_device.c_str(), p_.exposure_us,
-                                      p_.afl_mode, hid_fd_, get_logger());
+                                      cfg::kAflMode, hid_fd_, get_logger());
   }
 
   // Factory: one backend per the `backend` param. Unknown name → FATAL (caller stops the node).
@@ -188,13 +190,13 @@ class EconRos2Driver : public rclcpp::Node
     if (grab_thread_.joinable()) grab_thread_.join();
     if (backend_) backend_->stop();
     stamper_.close();
-    hid::close_and_restore(hid_fd_, p_.restore_master, get_logger());
+    hid::close(hid_fd_);
   }
 
   cfg::Params                         p_;          // runtime config
   cfg::MmapStamper                    stamper_;
   int                                 hid_fd_;
-  std::unique_ptr<cfg::CameraBackend> backend_;    // gstreamer | v4l2_opencv
+  std::unique_ptr<cfg::CameraBackend> backend_;    // gstreamer | opencv
   std::thread                         grab_thread_;
   std::atomic<bool>                   stop_;
   uint64_t                            n_pull_{0};         // successful grabs (single thread)

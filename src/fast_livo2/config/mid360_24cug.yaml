@@ -35,7 +35,7 @@
       outlier_threshold: 100 # 78 100 156 #100 200 500 700 infinite
       img_point_cov: 1000 # 100 1000 
       patch_size: 8
-      patch_pyrimid_level: 3
+      patch_pyrimid_level: 4
       normal_en: true
       raycast_en: true
       inverse_composition_en: false
@@ -51,13 +51,13 @@
       b_gyr_cov: 0.001 # 0.1 어차피 이 값 사용 안됨
 
     lio:
-      min_iterations: 5        # 수렴 기회수
+      min_iterations: 10        # 수렴 기회수
       dept_err: 0.02
       beam_err: 0.05           # pcl : 0.15
       min_eigen_value: 0.001   # 낮춰서 벽 평면 더 많이 수용
       voxel_size: 0.5          # meter
-      max_layer: 2             # voxel 레이어 높을 수록 연산량 매우 증가
-      max_points_num: 100      # voxel당 포인트 한도 증가
+      max_layer: 4             # voxel 레이어 높을 수록 연산량 매우 증가
+      max_points_num: 200      # voxel당 포인트 한도 증가
       layer_init_num: [5, 5, 5, 5, 5]  # 평면 초기화 문턱 낮춤
 
     local_map:  
@@ -84,7 +84,7 @@
       pcd_save_en: true
       type: 0 # 0: World Frame, 1: Body Frame;
       colmap_output_en: false # need to set interval = -1 
-      filter_size_pcd: 0.01 # 포인트 정밀도 단위: meter
+      filter_size_pcd: 0.005 # 포인트 정밀도 단위: meter (5mm)
       interval: -1
       # how many LiDAR frames saved in each pcd file;
       # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.

@@ -38,9 +38,16 @@ ament_target_dependencies(econ_monitor rclcpp sensor_msgs)
 target_include_directories(econ_monitor PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(econ_monitor ${OpenCV_LIBS})
 
+# Verification: subscribe raw bgr8 + dump one PNG/sec to the Desktop. Launched by verify.launch.py.
+add_executable(econ_image_saver src/image_saver.cpp)
+ament_target_dependencies(econ_image_saver rclcpp sensor_msgs)
+target_include_directories(econ_image_saver PRIVATE ${OpenCV_INCLUDE_DIRS})
+target_link_libraries(econ_image_saver ${OpenCV_LIBS})
+
 install(TARGETS
   econ_ros2_driver
   econ_monitor
+  econ_image_saver
   DESTINATION lib/${PROJECT_NAME}
 )
 

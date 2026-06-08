@@ -5,7 +5,7 @@
 //
 // Concrete backends:
 //   GstBackend         (gst_backend.hpp)         — v4l2src + nvvidconv/videoconvert via GStreamer
-//   V4l2OpencvBackend  (v4l2_opencv_backend.hpp) — direct V4L2 ioctl/mmap + OpenCV convert
+//   V4l2OpencvBackend  (opencv_backend.hpp) — direct V4L2 ioctl/mmap + OpenCV convert
 //
 // The node decides the output ImageFormat and passes it to start(); the backend never reads
 // Params::compressed itself. Frame bytes then follow that format:

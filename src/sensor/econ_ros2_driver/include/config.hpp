@@ -2,7 +2,7 @@
 // 디바이스/노출/트리거 기본값 + 해상도 프로파일 + ROS2 파라미터 로더.
 // constexpr k* 는 declare_parameter 의 "기본값"이고, config/config.yaml (또는 launch resolution:=) 가
 // 이를 오버라이드한다. 해상도는 숫자 파라미터로 받지 않고 resolution 프로파일 문자열을
-// resolve_profile() 로 풀어서 캡처/출력/fps 를 결정한다.
+// resolve_profile_uyvy()/resolve_profile_mjpg() 로 풀어서 캡처/출력/fps 를 결정한다(포맷별 표).
 
 #include <cstddef>
 #include <cstdint>
@@ -21,13 +21,18 @@ inline constexpr const char* kHidDevice = "/dev/24cug_hid";
 // 캡처 backend (Jetson 전용 — gstreamer 는 nvvidconv HW 경로)
 inline constexpr const char* kBackend  = "gstreamer";  // gstreamer | opencv
 
-// 해상도 프로파일 (sd | hd | fhd | wuxga). 실제 픽셀은 resolve_profile() 참조.
+// 해상도 프로파일 (sd | hd | fhd | wuxga). 실제 픽셀은 resolve_profile_uyvy/mjpg() 참조.
 inline constexpr const char* kResolution = "sd";
 
 // 노출/트리거
 inline constexpr int     kExposureUs    = 10000;  // 10 ms
-inline constexpr uint8_t kAflMode       = 0x00;   // Auto Frame Length OFF (ROS 파라미터는 int — uint8 로 캐스팅)
-inline constexpr bool    kRestoreMaster = false;  // shutdown 시 MASTER 복귀 안 함
+
+// nvvidconv 회전 (HW). gst-inspect-1.0 nvvidconv 이 머신 실측 enum:
+//   0 none / 1 counterclockwise(CCW 90°) / 2 rotate-180 / 3 clockwise(CW 90°).
+// 90°(1·3)은 출력 가로·세로를 swap → published 치수도 함께 바뀐다(pub_width/height 파생). gstreamer backend 전용.
+inline constexpr int     kFlipMethod    = 0;   // 기본 회전 없음
+// afl_mode 는 ROS 파라미터로 노출하지 않고 아래 값으로 하드코딩한다 (사용처에서 직접 참조).
+inline constexpr uint8_t kAflMode       = 0x00;   // Auto Frame Length OFF (하드코딩)
 
 // 발행 포맷
 // false → raw bgr8 Image (nvvidconv/videoconvert 경로).
@@ -40,9 +45,12 @@ inline constexpr const char* kTopicName = "/camera/image";
 inline constexpr const char* kFrameId   = "camera_init";
 
 // ── 해상도 프로파일 ──
-// 캡처 = 센서 native UYVY (HD/FHD/WUXGA 만 존재 — See3CAM_24CUG README 표 근거).
 // 출력 = nvvidconv 후 발행 해상도. sd 만 다운스케일(1280x720→640x360), 나머지는 풀프레임.
 // fps 는 caps 협상용 명목값 — trigger 모드 실효 프레임레이트는 외부 트리거(~10 Hz)가 결정.
+//
+// 캡처 fps 메뉴가 포맷마다 달라서(UYVY vs MJPG) 프로파일 표를 포맷별로 분리한다.
+// 각 표는 v4l2-ctl --list-formats-ext (/dev/24cug) 출력의 1:1 사본 — 조건 분기로 fps 를 보정하지 않는다.
+// 선택은 load_params() 가 compressed 로 한다 (compressed → MJPG, 아니면 UYVY).
 struct Resolution {
   int capture_width;
   int capture_height;
@@ -51,10 +59,25 @@ struct Resolution {
   int fps;
 };
 
-inline Resolution resolve_profile(const std::string& profile) {
+// 90° 회전(CCW=1 / CW=3)이면 출력 가로·세로가 바뀐다. 0(none)·2(180°)는 치수 불변.
+inline bool is_quarter_turn(int flip_method) { return flip_method == 1 || flip_method == 3; }
+
+// UYVY(raw, compressed=false) 캡처 프로파일.
+// v4l2-ctl UYVY 메뉴: 1280x720=60/120, 1920x1080=60, 1920x1200=55 (60 없음).
+inline Resolution resolve_profile_uyvy(const std::string& profile) {
   if (profile == "hd")    return {1280,  720, 1280,  720, 60};
   if (profile == "fhd")   return {1920, 1080, 1920, 1080, 60};
-  if (profile == "wuxga") return {1920, 1200, 1920, 1200, 60}; // MJPG 1920x1200 = 60/114 only (55 is UYVY-only → not-negotiated)
+  if (profile == "wuxga") return {1920, 1200, 1920, 1200, 55}; // UYVY 1920x1200 은 55 만 협상됨
+  // "sd" 및 그 외 → 기본 sd (캡처 HD, 출력 640x360 다운스케일)
+  return {1280, 720, 640, 360, 60};
+}
+
+// MJPG(compressed=true) 캡처 프로파일.
+// v4l2-ctl MJPG 메뉴: 1280x720=60/120, 1920x1080=30/60/120, 1920x1200=60/114.
+inline Resolution resolve_profile_mjpg(const std::string& profile) {
+  if (profile == "hd")    return {1280,  720, 1280,  720, 60};
+  if (profile == "fhd")   return {1920, 1080, 1920, 1080, 60};
+  if (profile == "wuxga") return {1920, 1200, 1920, 1200, 60}; // MJPG 1920x1200 = 60/114
   // "sd" 및 그 외 → 기본 sd (캡처 HD, 출력 640x360 다운스케일)
   return {1280, 720, 640, 360, 60};
 }
@@ -63,13 +86,14 @@ inline Resolution resolve_profile(const std::string& profile) {
 struct Params {
   std::string device;          // udev symlink (캡처)
   std::string hid_device;      // udev symlink (HID 제어)
-  std::string backend;         // gstreamer | v4l2_opencv
+  std::string backend;         // gstreamer | opencv
   std::string resolution;      // 프로파일 문자열 (sd | hd | fhd | wuxga)
   Resolution  res;             // resolution 을 resolve_profile() 로 푼 결과
-  size_t      expected_size;   // 파생값 — output_width * output_height * 3 (BGR 3ch)
+  int         flip_method;     // nvvidconv 회전 enum (0 none / 1 CCW / 2 180 / 3 CW). gstreamer 전용
+  int         pub_width;       // 파생 — 회전 반영한 발행 가로 (90° 회전 시 output_height)
+  int         pub_height;      // 파생 — 회전 반영한 발행 세로 (90° 회전 시 output_width)
+  size_t      expected_size;   // 파생값 — pub_width * pub_height * 3 (BGR 3ch). 회전 무관(가로·세로 곱 불변)
   int         exposure_us;
-  uint8_t     afl_mode;
-  bool        restore_master;
   bool        compressed;      // true → MJPG CompressedImage, false → raw bgr8 Image
   std::string topic_name;
   std::string frame_id;
@@ -84,13 +108,18 @@ inline Params load_params(rclcpp::Node& node) {
   p.backend        = node.declare_parameter<std::string>("backend",     kBackend);
   p.resolution     = node.declare_parameter<std::string>("resolution",  kResolution);
   p.exposure_us    = node.declare_parameter<int>("exposure_us",         kExposureUs);
-  p.afl_mode       = static_cast<uint8_t>(node.declare_parameter<int>("afl_mode", kAflMode));
-  p.restore_master = node.declare_parameter<bool>("restore_master",     kRestoreMaster);
   p.compressed     = node.declare_parameter<bool>("compressed",         kCompressed);
+  p.flip_method    = node.declare_parameter<int>("flip_method",         kFlipMethod);
   p.topic_name     = node.declare_parameter<std::string>("topic_name",  kTopicName);
   p.frame_id       = node.declare_parameter<std::string>("frame_id",    kFrameId);
-  p.res            = resolve_profile(p.resolution);
-  p.expected_size  = static_cast<size_t>(p.res.output_width) * p.res.output_height * 3;
+  // compressed 가 캡처 포맷을 결정 → 포맷별 프로파일 표에서 fps 까지 올바르게 가져온다.
+  p.res            = p.compressed ? resolve_profile_mjpg(p.resolution)
+                                  : resolve_profile_uyvy(p.resolution);
+  // 90° 회전이면 발행 가로·세로 swap (nvvidconv 가 rotate 후 출력하므로 치수가 바뀐다).
+  const bool quarter = is_quarter_turn(p.flip_method);
+  p.pub_width      = quarter ? p.res.output_height : p.res.output_width;
+  p.pub_height     = quarter ? p.res.output_width  : p.res.output_height;
+  p.expected_size  = static_cast<size_t>(p.pub_width) * p.pub_height * 3;
   return p;
 }
 
