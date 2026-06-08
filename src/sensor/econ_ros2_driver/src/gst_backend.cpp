@@ -1,12 +1,12 @@
-// GstBackend implementation — see gst_backend.hpp for the pipeline overview.
+/// @file gst_backend.cpp
+/// GstBackend implementation — see gst_backend.hpp for the pipeline overview.
 
 #include "gst_backend.hpp"
+#include "econ_ros2_driver.hpp"   // full definition of Params/Resolution (member access below)
 
 #include <rclcpp/logging.hpp>
 
 #include "blackbox.hpp"
-
-namespace see3cam {
 
 GstBackend::~GstBackend() { stop(); }
 
@@ -30,7 +30,7 @@ bool GstBackend::start(const Params& p, ImageFormat format, rclcpp::Logger logge
   sink_ = GST_APP_SINK(sink);
 
   if (format == ImageFormat::kJpeg && p.flip_method != 0) {
-    // jpeg 체인은 passthrough(디코더·nvvidconv 없음) → 회전 불가. 무시하고 경고.
+    // the jpeg chain is passthrough (no decoder/nvvidconv) → cannot rotate. ignore and warn.
     RCLCPP_WARN(logger_,
       "\033[33m[gst] flip_method=%d ignored — jpeg passthrough chain cannot rotate\033[0m",
       p.flip_method);
@@ -39,7 +39,7 @@ bool GstBackend::start(const Params& p, ImageFormat format, rclcpp::Logger logge
   const bool linked = (format == ImageFormat::kJpeg)
     ? build_jpeg_chain(src, sink, p.res)
     : build_raw_chain(src, sink, p);
-  if (!linked) return false;
+  if (!linked) { return false; }
 
   // src-pad probe: stamp MONO_RAW at each v4l2src push (push-side timing)
   GstPad* src_pad = gst_element_get_static_pad(src, "src");
@@ -53,11 +53,11 @@ bool GstBackend::start(const Params& p, ImageFormat format, rclcpp::Logger logge
   return true;
 }
 
-// Pull one sample, map its memory, hand back a borrowed view. release() unmaps/unrefs.
+/// Pull one sample, map its memory, hand back a borrowed view. release() unmaps/unrefs.
 Frame GstBackend::grab(int timeout_ms) {
   sample_ = gst_app_sink_try_pull_sample(sink_, timeout_ms * GST_MSECOND);
   drain_bus();
-  if (!sample_) return {};
+  if (!sample_) { return {}; }
 
   GstBuffer* buf = gst_sample_get_buffer(sample_);
   if (!buf) { discard_sample(); return {}; }
@@ -92,7 +92,7 @@ void GstBackend::stop() {
 uint64_t GstBackend::push_count()   const { return n_push_.load(std::memory_order_relaxed); }
 uint64_t GstBackend::t_capture_ns() const { return t_push_ns_; }  // 64-bit aligned, torn read unlikely
 
-// Raw chain: UYVY capture → nvvidconv (color + downscale + rotation on ISP) → BGRx → videoconvert → BGR.
+/// Raw chain: UYVY capture → nvvidconv (color + downscale + rotation on ISP) → BGRx → videoconvert → BGR.
 bool GstBackend::build_raw_chain(GstElement* src, GstElement* sink, const Params& p) {
   const Resolution& res = p.res;
   GstElement* caps_cap = gst_element_factory_make("capsfilter",   "caps_capture");
@@ -106,12 +106,12 @@ bool GstBackend::build_raw_chain(GstElement* src, GstElement* sink, const Params
     return false;
   }
 
-  // 회전 (HW). 0 none / 1 CCW90 / 2 180 / 3 CW90 — config.hpp flip_method.
+  // rotation (HW). 0 none / 1 CCW90 / 2 180 / 3 CW90 — config.hpp flip_method.
   g_object_set(nvconv, "flip-method", p.flip_method, nullptr);
 
   set_caps(caps_cap, make_uyvy_caps(res));
-  // nvvidconv output: BGRx pub WxH. 90° 회전 시 pub 가로·세로가 swap 되어 있으므로
-  // (config.hpp 파생) rotate 후 출력 치수와 정확히 일치한다 (downscale 도 여기서).
+  // nvvidconv output: BGRx pub WxH. On a 90° rotation pub width·height are already swapped
+  // (derived in config.hpp), so they match the post-rotation output dimensions exactly (downscale also here).
   GstCaps* c_output = gst_caps_new_simple(
     "video/x-raw",
     "format", G_TYPE_STRING, "BGRx",
@@ -131,7 +131,7 @@ bool GstBackend::build_raw_chain(GstElement* src, GstElement* sink, const Params
   return true;
 }
 
-// Compressed chain: camera MJPG → v4l2src image/jpeg → appsink (no encoder, no rescale).
+/// Compressed chain: camera MJPG → v4l2src image/jpeg → appsink (no encoder, no rescale).
 bool GstBackend::build_jpeg_chain(GstElement* src, GstElement* sink, const Resolution& res) {
   GstElement* caps_jpeg = gst_element_factory_make("capsfilter", "caps_jpeg");
   if (!caps_jpeg) {
@@ -155,7 +155,7 @@ bool GstBackend::build_jpeg_chain(GstElement* src, GstElement* sink, const Resol
   return true;
 }
 
-// Capture caps: UYVY at capture WxH @ fps (nominal under trigger).
+/// Capture caps: UYVY at capture WxH @ fps (nominal under trigger).
 GstCaps* GstBackend::make_uyvy_caps(const Resolution& res) {
   return gst_caps_new_simple(
     "video/x-raw",
@@ -166,13 +166,13 @@ GstCaps* GstBackend::make_uyvy_caps(const Resolution& res) {
     nullptr);
 }
 
-// Set caps on a capsfilter and drop our ref (g_object_set takes its own).
+/// Set caps on a capsfilter and drop our ref (g_object_set takes its own).
 void GstBackend::set_caps(GstElement* capsfilter, GstCaps* caps) {
   g_object_set(capsfilter, "caps", caps, nullptr);
   gst_caps_unref(caps);
 }
 
-// Non-blocking: pop + log one ERROR/EOS bus message if present.
+/// Non-blocking: pop + log one ERROR/EOS bus message if present.
 void GstBackend::drain_bus() {
   GstBus*     bus = gst_element_get_bus(pipeline_);
   GstMessage* msg = gst_bus_pop_filtered(
@@ -184,8 +184,8 @@ void GstBackend::drain_bus() {
       gst_message_parse_error(msg, &gerr, &dbg);
       RCLCPP_ERROR(logger_, "\033[31m[gst] BUS ERROR — %s | %s\033[0m",
                    gerr ? gerr->message : "unknown", dbg ? dbg : "");
-      if (gerr) g_error_free(gerr);
-      if (dbg)  g_free(dbg);
+      if (gerr) { g_error_free(gerr); }
+      if (dbg)  { g_free(dbg); }
     } else {
       RCLCPP_WARN(logger_, "\033[33m[gst] BUS EOS\033[0m");
     }
@@ -196,12 +196,10 @@ void GstBackend::drain_bus() {
 
 void GstBackend::discard_sample() { gst_sample_unref(sample_); sample_ = nullptr; }
 
-// Buffer probe on v4l2src src pad: one clock read per push, buffer passes through unmodified.
+/// Buffer probe on v4l2src src pad: one clock read per push, buffer passes through unmodified.
 GstPadProbeReturn GstBackend::on_src_push(GstPad*, GstPadProbeInfo*, gpointer data) {
   auto* self = static_cast<GstBackend*>(data);
   self->t_push_ns_ = blackbox::mono_raw_ns();
   self->n_push_.fetch_add(1, std::memory_order_relaxed);
   return GST_PAD_PROBE_OK;
 }
-
-}  // namespace see3cam

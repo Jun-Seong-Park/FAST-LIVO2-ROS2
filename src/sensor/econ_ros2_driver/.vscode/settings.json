@@ -1,0 +1,15 @@
+{
+  // cpptools 와 clangd 가 IntelliSense(정의 점프·hover)를 두고 충돌하므로
+  // cpptools 엔진을 끄고 clangd 가 단독으로 담당하게 한다.
+  // clangd 는 build/econ_ros2_driver/compile_commands.json 으로 include 경로를 잡는다.
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "clangd.arguments": [
+    "--compile-commands-dir=${workspaceFolder}/build/econ_ros2_driver",
+    // clang 22 의 자체 GCC 탐지가 이 시스템에 없는 gcc-12 를 가정해 libstdc++ 헤더를
+    // 못 찾는다(csignal/atomic/string not found). 실제 컴파일러(g++-11)에 직접 물어
+    // 정확한 표준 라이브러리 경로(/usr/include/c++/11 …)를 가져오게 한다.
+    "--query-driver=/usr/bin/c++,/usr/bin/g++*,/usr/bin/x86_64-linux-gnu-g++*",
+    "--background-index",
+    "--header-insertion=never"
+  ]
+}

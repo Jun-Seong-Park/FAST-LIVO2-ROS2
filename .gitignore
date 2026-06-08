@@ -8,3 +8,8 @@ trace/notes
 trace/plots
 src/fast_livo2/Log/
 src/blackbox/plots/
+
+# Doxygen config + generated docs (econ_ros2_driver)
+src/sensor/econ_ros2_driver/Doxyfile
+src/sensor/econ_ros2_driver/html/
+src/sensor/econ_ros2_driver/latex/

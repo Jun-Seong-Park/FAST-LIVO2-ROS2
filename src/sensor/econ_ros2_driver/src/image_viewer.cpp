@@ -1,10 +1,13 @@
-// image_viewer — PC-side / local live viewer for the econ image stream.
-//
-// Subscribes (best_effort, to match the driver's publisher QoS) to either:
-//   encoding=raw        → sensor_msgs/Image (bgr8), shown directly
-//   encoding=compressed → sensor_msgs/CompressedImage (JPEG), imdecode'd
-// and shows each frame in a window. Also logs the receive rate once per second
-// so you see both the picture and whether the LAN is keeping up.
+/**
+ * @file image_viewer.cpp
+ * @brief PC-side / local live viewer for the econ image stream.
+ *
+ * Subscribes (best_effort, to match the driver's publisher QoS) to either:
+ *   encoding=raw        → sensor_msgs/Image (bgr8), shown directly
+ *   encoding=compressed → sensor_msgs/CompressedImage (JPEG), imdecode'd
+ * and shows each frame in a window. Also logs the receive rate once per second
+ * so you see both the picture and whether the LAN is keeping up.
+ */
 
 #include <chrono>
 #include <cstdint>
@@ -54,7 +57,7 @@ public:
 
     timer_ = create_wall_timer(std::chrono::seconds(1), [this]() { report(); });
 
-    // KEEPRATIO 로 종횡비(16:9) 고정, 시작 크기는 원본 1280x720 의 절반으로 박는다.
+    // KEEPRATIO keeps the aspect ratio (16:9) fixed; start size is half of the original 1280x720.
     cv::namedWindow(window_, cv::WINDOW_NORMAL | cv::WINDOW_KEEPRATIO);
     cv::resizeWindow(window_, 960, 540);
     RCLCPP_INFO(get_logger(),
@@ -63,7 +66,7 @@ public:
   }
 
 private:
-  // raw bgr8 path: wrap the message buffer as a cv::Mat without copying.
+  /// raw bgr8 path: wrap the message buffer as a cv::Mat without copying.
   void on_raw(const sensor_msgs::msg::Image::SharedPtr msg)
   {
     ++window_count_;
@@ -88,7 +91,7 @@ private:
     cv::waitKey(1);  // pump the GUI event loop
   }
 
-  // compressed (JPEG) path: decode to BGR with OpenCV.
+  /// compressed (JPEG) path: decode to BGR with OpenCV.
   void on_compressed(const sensor_msgs::msg::CompressedImage::SharedPtr msg)
   {
     ++window_count_;

@@ -1,9 +1,12 @@
-// image_saver — periodic frame dumper for verifying the raw bgr8 image stream.
-//
-// Subscribes to /camera/image (best_effort, matching the driver's publisher QoS),
-// keeps the latest frame, and writes one PNG per second into a folder on the Desktop.
-// Lets you verify colour / rotation / resolution from static snapshots — no live
-// viewer, no remote desktop, loopback only.
+/**
+ * @file image_saver.cpp
+ * @brief Periodic frame dumper for verifying the raw bgr8 image stream.
+ *
+ * Subscribes to /camera/image (best_effort, matching the driver's publisher QoS),
+ * keeps the latest frame, and writes one PNG per second into a folder on the Desktop.
+ * Lets you verify colour / rotation / resolution from static snapshots — no live
+ * viewer, no remote desktop, loopback only.
+ */
 
 #include <chrono>
 #include <cstdint>

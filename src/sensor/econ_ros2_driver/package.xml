@@ -4,8 +4,9 @@
   <name>econ_ros2_driver</name>
   <version>0.1.0</version>
   <description>
-    econ_ros2_driver provides a ROS2 driver for the see3cam with trigger and master
-    on jetson platform and PC.     
+    ROS2 driver for See3cam with external trigger and time synchronization. 
+    This package provides a ROS2 interface for the See3cam camera, 
+    allowing users to capture images and time synchronize with mid360 on jetson platform.
   </description>
   <maintainer email="jspark2954@aluxonline.com">alux</maintainer>
   <license>MIT</license>

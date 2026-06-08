@@ -16,29 +16,21 @@ find_package(OpenCV REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GST REQUIRED gstreamer-1.0 gstreamer-app-1.0)
 
-# Entry node + one TU per backend (declaration in include/, definition in src/).
-# Adding a new backend = one more src/*.cpp here, without bloating the node TU.
 add_executable(econ_ros2_driver
   src/econ_ros2_driver.cpp
-  src/gst_backend.cpp
-  src/opencv_backend.cpp)
+  src/gst_backend.cpp)
 ament_target_dependencies(econ_ros2_driver rclcpp sensor_msgs)
 target_include_directories(econ_ros2_driver PRIVATE
   include
-  ${GST_INCLUDE_DIRS}
-  ${OpenCV_INCLUDE_DIRS})
+  ${GST_INCLUDE_DIRS})
 target_link_libraries(econ_ros2_driver
-  ${GST_LIBRARIES}
-  ${OpenCV_LIBS})
+  ${GST_LIBRARIES})
 
-# PC-side live viewer: JPEG-decode the compressed stream + imshow, logs rate.
-# Launched by host.launch.py.
 add_executable(econ_monitor src/image_viewer.cpp)
 ament_target_dependencies(econ_monitor rclcpp sensor_msgs)
 target_include_directories(econ_monitor PRIVATE ${OpenCV_INCLUDE_DIRS})
 target_link_libraries(econ_monitor ${OpenCV_LIBS})
 
-# Verification: subscribe raw bgr8 + dump one PNG/sec to the Desktop. Launched by verify.launch.py.
 add_executable(econ_image_saver src/image_saver.cpp)
 ament_target_dependencies(econ_image_saver rclcpp sensor_msgs)
 target_include_directories(econ_image_saver PRIVATE ${OpenCV_INCLUDE_DIRS})
