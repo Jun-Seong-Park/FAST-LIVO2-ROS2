@@ -90,7 +90,7 @@ void GstBackend::stop() {
 }
 
 uint64_t GstBackend::push_count()   const { return n_push_.load(std::memory_order_relaxed); }
-uint64_t GstBackend::t_capture_ns() const { return t_push_ns_; }  // 64-bit aligned, torn read unlikely
+uint64_t GstBackend::t_capture_ns() const { return t_push_ns_.load(std::memory_order_relaxed); }
 
 /// Raw chain: UYVY capture → nvvidconv (color + downscale + rotation on ISP) → BGRx → videoconvert → BGR.
 bool GstBackend::build_raw_chain(GstElement* src, GstElement* sink, const Params& p) {
@@ -106,12 +106,12 @@ bool GstBackend::build_raw_chain(GstElement* src, GstElement* sink, const Params
     return false;
   }
 
-  // rotation (HW). 0 none / 1 CCW90 / 2 180 / 3 CW90 — config.hpp flip_method.
+  // rotation (HW). 0 none / 1 CCW90 / 2 180 / 3 CW90 — flip_method param.
   g_object_set(nvconv, "flip-method", p.flip_method, nullptr);
 
   set_caps(caps_cap, make_uyvy_caps(res));
   // nvvidconv output: BGRx pub WxH. On a 90° rotation pub width·height are already swapped
-  // (derived in config.hpp), so they match the post-rotation output dimensions exactly (downscale also here).
+  // (derived in load_params), so they match the post-rotation output dimensions exactly (downscale also here).
   GstCaps* c_output = gst_caps_new_simple(
     "video/x-raw",
     "format", G_TYPE_STRING, "BGRx",
@@ -199,7 +199,7 @@ void GstBackend::discard_sample() { gst_sample_unref(sample_); sample_ = nullptr
 /// Buffer probe on v4l2src src pad: one clock read per push, buffer passes through unmodified.
 GstPadProbeReturn GstBackend::on_src_push(GstPad*, GstPadProbeInfo*, gpointer data) {
   auto* self = static_cast<GstBackend*>(data);
-  self->t_push_ns_ = blackbox::mono_raw_ns();
+  self->t_push_ns_.store(blackbox::mono_raw_ns(), std::memory_order_relaxed);
   self->n_push_.fetch_add(1, std::memory_order_relaxed);
   return GST_PAD_PROBE_OK;
 }

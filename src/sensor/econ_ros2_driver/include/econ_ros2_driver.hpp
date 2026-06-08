@@ -116,11 +116,11 @@ class EconRos2Driver : public rclcpp::Node
   const rclcpp::SensorDataQoS qos_;
 
   Params                              p_;            // runtime config
-  MmapStamper                         stamper_;
-  int                                 hid_fd_;
+  MmapStamper                         stamper_{resolve_shared_path()};
+  int                                 hid_fd_{-1};
   GstBackend                          backend_;      // GStreamer capture+convert (only backend)
   std::thread                         grab_thread_;
-  std::atomic<bool>                   stop_loop_;
+  std::atomic<bool>                   stop_loop_{false};
   uint64_t                            n_pull_{0};           // successful grabs (single thread)
   uint64_t                            last_push_seen_{0};
   uint64_t                            total_drops_{0};

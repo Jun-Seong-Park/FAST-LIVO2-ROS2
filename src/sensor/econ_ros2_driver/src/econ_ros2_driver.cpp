@@ -24,10 +24,7 @@ namespace hid = see3cam::hid;
 // ── lifecycle ──────────────────────────────────────────────────────────────
 
 EconRos2Driver::EconRos2Driver()
-  : Node("econ_ros2_driver"),
-    stamper_(resolve_shared_path()),
-    hid_fd_(-1),
-    stop_loop_(false)
+  : Node("econ_ros2_driver")
 {
   // params
   p_ = load_params();
@@ -131,9 +128,10 @@ void EconRos2Driver::loop()
   // most 100 ms away) is harmless, so this hot loop avoids a memory barrier.
   while (!stop_loop_.load(std::memory_order_relaxed) && rclcpp::ok()) {
     Frame frame = backend_.grab(100);   // 100 ms timeout; invalid Frame on timeout
-    if (!frame.valid()) { // timeout for 100ms. no frame ready. will cause problem
-      RCLCPP_WARN_STREAM(get_logger(),
-        "\033[33m grab timeout (push=" << backend_.push_count() << " pull=" << n_pull_ << ")\033[0m");
+    if (!frame.valid()) { // timeout and error will be logged in gst_backend
+      if (blackbox::mono_raw_ns() - backend_.t_capture_ns() > 200000000)   // >200 ms (2 trigger periods) with no frame
+      RCLCPP_WARN(get_logger(),
+        "\033[33mgrab timeout — no frames received for >100 ms\033[0m");
       continue;
     }
     ++n_pull_;

@@ -15,7 +15,7 @@
  * kRawBgr8:
  *   v4l2src ─ caps(UYVY WxH @fps) ─ nvvidconv(flip-method) ─ caps(BGRx pub WxH) ─ videoconvert ─ caps(BGR) ─ appsink
  *     - nvvidconv does color + downscale + rotation on the Tegra ISP (HW); sd downscales here, others pass through
- *     - flip_method 90° (1/3) swaps output WxH → caps use pub_width/pub_height (derived in config.hpp)
+ *     - flip_method 90° (1/3) swaps output WxH → caps use pub_width/pub_height (derived in load_params)
  * kJpeg:
  *   v4l2src ─ caps(image/jpeg WxH @fps) ─ appsink   (no encoder, no rescale)
  *
@@ -90,5 +90,5 @@ class GstBackend {
   GstMemory*            memory_   = nullptr;   // current grab() memory
   GstMapInfo            info_{};               // current grab() map info
   std::atomic<uint64_t> n_push_{0};            // buffers pushed by v4l2src
-  uint64_t              t_push_ns_{0};         // MONO_RAW at last push
+  std::atomic<uint64_t> t_push_ns_{0};         // MONO_RAW at last push (read by node grab thread)
 };
