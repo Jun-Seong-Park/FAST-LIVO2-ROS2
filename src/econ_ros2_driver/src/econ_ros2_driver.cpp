@@ -19,8 +19,6 @@
 #include "blackbox.hpp"
 #include "hid_control.hpp"
 
-namespace hid = see3cam::hid;
-
 // ── lifecycle ──────────────────────────────────────────────────────────────
 
 EconRos2Driver::EconRos2Driver()
@@ -29,27 +27,30 @@ EconRos2Driver::EconRos2Driver()
   // params
   p_ = load_params();
   RCLCPP_INFO(get_logger(),
-    "backend=gstreamer resolution=%s capture=%dx%d output=%dx%d flip=%d pub=%dx%d compressed=%s",
+    "backend=gstreamer resolution=%s capture=%dx%d output=%dx%d compressed=%s",
     p_.resolution.c_str(),
     p_.res.capture_width, p_.res.capture_height,
     p_.res.output_width, p_.res.output_height,
-    p_.flip_method, p_.pub_width, p_.pub_height,
     p_.compressed ? "true" : "false");
 
-  // blackbox path
-  blackbox::image::init(blackbox::session_dir() + "/econ_ros2_driver_pub.bin");
+  // blackbox path — capture the session dir ONCE (session_dir() re-times on every call) and reuse
+  // it for both the binary stream and the HID-check txt, so both land in the same session folder.
+  const std::string session = blackbox::session_dir();
+  blackbox::image::init(session + "/econ_ros2_driver_pub.bin");
 
   setup_publisher();
 
-  if (!init_hid())     { return; }   // HID stream-mode + exposure
-  if (!init_backend()) { return; }   // capture+convert pipeline (gstreamer)
+  // init_hid now does ALL HID setup (exposure + stream-mode + flip, flip pre-STREAMON) and the
+  // readback check (→ session/econ_hid_check.txt) before returning.
+  if (!init_hid(session)) { return; }
+  if (!init_backend())    { return; }   // capture+convert pipeline (gstreamer)
 
   grab_thread_ = std::thread(&EconRos2Driver::loop, this);
 }
 
 EconRos2Driver::~EconRos2Driver()
 {
-  shutdown();
+  shutdown(); // EconRos2Driver::shutdown()
   blackbox::image::shutdown();
 }
 
@@ -71,17 +72,12 @@ Params EconRos2Driver::load_params()
   p.resolution  = declare_parameter<std::string>("resolution",  kResolution);
   p.exposure_us = declare_parameter<int>("exposure_us",         kExposureUs);
   p.compressed  = declare_parameter<bool>("compressed",         kCompressed);
-  p.flip_method = declare_parameter<int>("flip_method",         kFlipMethod);
   p.topic_name  = declare_parameter<std::string>("topic_name",  kTopicName);
   p.frame_id    = declare_parameter<std::string>("frame_id",    kFrameId);
   // compressed decides the capture format → pulls fps correctly from the per-format profile table.
   p.res = p.compressed ? resolve_profile_mjpg(p.resolution)
                        : resolve_profile_uyvy(p.resolution);
-  // On a 90° rotation, swap published width·height (nvvidconv outputs after rotating, so dimensions change).
-  const bool quarter = is_quarter_turn(p.flip_method);
-  p.pub_width     = quarter ? p.res.output_height : p.res.output_width;
-  p.pub_height    = quarter ? p.res.output_width  : p.res.output_height;
-  p.expected_size = static_cast<size_t>(p.pub_width) * p.pub_height * 3;
+  p.expected_size = static_cast<size_t>(p.res.output_width) * p.res.output_height * 3;
   return p;
 }
 
@@ -99,17 +95,18 @@ void EconRos2Driver::setup_publisher()
     msg_.header.frame_id = p_.frame_id;
     msg_.encoding        = "bgr8";
     msg_.is_bigendian    = 0;
-    msg_.width  = p_.pub_width;
-    msg_.height = p_.pub_height;
-    msg_.step   = p_.pub_width * 3;
+    msg_.width  = p_.res.output_width;
+    msg_.height = p_.res.output_height;
+    msg_.step   = p_.res.output_width * 3;
     msg_.data.resize(p_.expected_size);
   }
 }
 
-bool EconRos2Driver::init_hid()
+bool EconRos2Driver::init_hid(const std::string& session_dir)
 {
-  return hid::open_and_init_trigger(p_.hid_device.c_str(), p_.exposure_us,
-                                    kAflMode, hid_fd_, get_logger());
+  return see3cam24cug::hid::open_and_init_trigger(
+      p_.hid_device.c_str(), static_cast<uint32_t>(p_.exposure_us),
+      session_dir, hid_fd_, get_logger());
 }
 
 bool EconRos2Driver::init_backend()
@@ -131,7 +128,7 @@ void EconRos2Driver::loop()
     if (!frame.valid()) { // timeout and error will be logged in gst_backend
       if (blackbox::mono_raw_ns() - backend_.t_capture_ns() > 200000000)   // >200 ms (2 trigger periods) with no frame
       RCLCPP_WARN(get_logger(),
-        "\033[33mgrab timeout — no frames received for >100 ms\033[0m");
+        "\033[33mgrab timeout — no frames received for >200 ms\033[0m");
       continue;
     }
     ++n_pull_;
@@ -197,7 +194,7 @@ void EconRos2Driver::shutdown()
   if (grab_thread_.joinable()) { grab_thread_.join(); }
   backend_.stop();   // idempotent — safe even if start() never ran
   stamper_.close();
-  hid::close(hid_fd_);
+  see3cam24cug::hid::close(hid_fd_);
 }
 
 // ── entry point ────────────────────────────────────────────────────────────

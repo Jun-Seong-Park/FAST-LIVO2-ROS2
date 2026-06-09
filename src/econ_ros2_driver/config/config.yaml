@@ -10,7 +10,7 @@ econ_ros2_driver:
     fastdds_loopback_xml: "fastdds_loopback.xml"
     
     # cam control
-    auto_exposure:  false
+    auto_exposure:  false # dead parameter yet. TODO: need update
     exposure_us:    10000    # [us]
     resolution:     "hd" # sd | hd | fhd | wuxga
     

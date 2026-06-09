@@ -20,7 +20,7 @@
 
     time_offset: 
       imu_time_offset: 0.0
-      img_time_offset: 0.073
+      img_time_offset: 0.073        # measured base : 0.073 second. 
       exposure_time_init: 0.005     # Cam Exposure Time / 2 [sec] 5ms -> 0.005s
 
     preprocess:
@@ -28,12 +28,12 @@
       filter_size_surf: 0.5
       lidar_type: 1 # Livox mid360 LiDAR
       scan_line: 4 
-      blind: 0.1 #  blind area near LiDAR, [meter]
+      blind: 0.5 #  blind area near LiDAR, [meter] {mid360 minimum: 0.1m physically}
 
     vio:
-      min_iterations: 5
-      outlier_threshold: 100 # 78 100 156 #100 200 500 700 infinite
-      img_point_cov: 1000 # 100 1000 
+      min_iterations: 10
+      outlier_threshold: 100 # 78 100 156 #100 200 500 700 infinite // 광도 잔차. 
+      img_point_cov: 1000 # 100 1000 // 밝기 측정 노이즈 분산 [intensty^2] 줄이면 이미지 신뢰, 늘리면 LiDAR 신뢰
       patch_size: 8
       patch_pyrimid_level: 4
       normal_en: true
@@ -50,11 +50,15 @@
       b_acc_cov: 0.001 # 0.1 어차피 이 값 사용 안됨
       b_gyr_cov: 0.001 # 0.1 어차피 이 값 사용 안됨
 
+    ## MID360 sepecific: 
+    # Distance Random Error cov (1sigma) : =<2cm(@10m), =<3cm(@0.2m)
+    # Angular Random Error cov (1sigma) : =<0.15° (w/o distance)
+    # 200,000 points per second
     lio:
-      min_iterations: 10        # 수렴 기회수
-      dept_err: 0.02
-      beam_err: 0.05           # pcl : 0.15
-      min_eigen_value: 0.001   # 낮춰서 벽 평면 더 많이 수용
+      min_iterations: 10       # 수렴 기회수
+      dept_err: 0.03           # pcl : 0.02
+      beam_err: 0.15           # pcl : 0.15
+      min_eigen_value: 0.005   # 낮춰서 벽 평면 더 많이 수용
       voxel_size: 0.5          # meter
       max_layer: 4             # voxel 레이어 높을 수록 연산량 매우 증가
       max_points_num: 200      # voxel당 포인트 한도 증가

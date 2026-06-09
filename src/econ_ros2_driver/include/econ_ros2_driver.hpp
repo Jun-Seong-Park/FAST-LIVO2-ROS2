@@ -38,9 +38,6 @@ struct Resolution {
   int fps;
 };
 
-/// A 90° rotation (CCW=1 / CW=3) swaps output width·height. 0(none)·2(180°) keep dimensions.
-inline bool is_quarter_turn(int flip_method) { return flip_method == 1 || flip_method == 3; }
-
 /// UYVY (raw, compressed=false) capture profile.
 /// v4l2-ctl UYVY menu: 1280x720=60/120, 1920x1080=60, 1920x1200=55 (no 60).
 inline Resolution resolve_profile_uyvy(const std::string& profile) {
@@ -67,10 +64,7 @@ struct Params {
   std::string hid_device;      // udev symlink (HID control)
   std::string resolution;      // profile string (sd | hd | fhd | wuxga)
   Resolution  res;             // result of resolving resolution via resolve_profile()
-  int         flip_method;     // nvvidconv rotation enum (0 none / 1 CCW / 2 180 / 3 CW). gstreamer only
-  int         pub_width;       // derived — published width after rotation (output_height on 90° rotation)
-  int         pub_height;      // derived — published height after rotation (output_width on 90° rotation)
-  size_t      expected_size;   // derived — pub_width * pub_height * 3 (BGR 3ch). rotation-invariant
+  size_t      expected_size;   // derived — output_width * output_height * 3 (BGR 3ch)
   int         exposure_us;
   bool        compressed;      // true → MJPG CompressedImage, false → raw bgr8 Image
   std::string topic_name;
@@ -87,10 +81,8 @@ class EconRos2Driver : public rclcpp::Node
   // ── declare_parameter defaults (overridable via config/config.yaml) ──
   static constexpr const char* kDevice     = "/dev/24cug";
   static constexpr const char* kHidDevice  = "/dev/24cug_hid";
-  static constexpr const char* kResolution = "sd";
+  static constexpr const char* kResolution = "hd";
   static constexpr int         kExposureUs = 10000;   // 10 ms
-  static constexpr int         kFlipMethod = 0;       // no rotation by default
-  static constexpr uint8_t     kAflMode    = 0x00;    // Auto Frame Length OFF (hardcoded)
   static constexpr bool        kCompressed = false;
   static constexpr const char* kTopicName  = "/camera/image";
   static constexpr const char* kFrameId    = "camera_init";
@@ -101,8 +93,8 @@ class EconRos2Driver : public rclcpp::Node
   Params load_params();
   /// Only the active format's publisher/buffer is set up; the other stays unused.
   void   setup_publisher();
-  /// HID external-trigger mode + exposure.
-  bool   init_hid();
+  /// HID external-trigger mode + exposure + flip, then readback-verify all → <session>/econ_hid_check.txt.
+  bool   init_hid(const std::string& session_dir);
   /// Start the GStreamer capture+convert backend in the chosen format.
   bool   init_backend();
   /// Main capture loop (grab thread): grab → publish → release.

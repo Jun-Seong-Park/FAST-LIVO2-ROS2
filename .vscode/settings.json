@@ -1,0 +1,16 @@
+{
+  // C/C++ 확장(cpptools) 의 IntelliSense 비활성화 — clangd 와 충돌 방지
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "C_Cpp.autocomplete": "disabled",
+  "C_Cpp.errorSquiggles": "disabled",
+
+  // clangd 설정
+  "clangd.path": "/usr/bin/clangd",
+  "clangd.arguments": [
+    "--background-index",
+    "--clang-tidy",
+    "--completion-style=detailed",
+    "--header-insertion=never",
+    "--compile-commands-dir=${workspaceFolder}"
+  ]
+}
