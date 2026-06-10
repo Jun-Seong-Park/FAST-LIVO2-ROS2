@@ -51,9 +51,10 @@
 namespace livox_ros {
 
 #ifdef BUILDING_ROS2
-// LiDAR/IMU publish trace 는 blackbox 가 담당:
-//   blackbox::lidar::log(header_stamp_ns)  →  $HOME/FAST-LIVO2-ROS2/trace/log/lidar_pubrecord.bin
-//   blackbox::imu::log  (header_stamp_ns)  →  $HOME/FAST-LIVO2-ROS2/trace/log/imu_pubrecord.bin
+// blackbox handles the LiDAR/IMU publish trace (vendored header, include/blackbox/):
+//   blackbox::lidar::log(header_stamp_ns)  →  <session_dir>/lidar_pubrecord.bin
+//   blackbox::imu::log  (header_stamp_ns)  →  <session_dir>/imu_pubrecord.bin
+// session_dir = ~/.blackbox/log/<YYYY-MM-DD-HH-MM-SS>-<pid>/ — fresh per run.
 // record schema = { seq, header_stamp, t_pub_ns } little-endian.
 static inline double NsToSec(uint64_t ns) {
   return static_cast<double>(ns) * 1e-9;
@@ -95,9 +96,11 @@ Lddc::Lddc(int format, int multi_topic, int data_src, int output_type,
 #if 0
   bag_ = nullptr;
 #endif
-  blackbox::lidar::init(blackbox::log_dir() + "/lidar_pubrecord.bin");
-  blackbox::imu::init(blackbox::log_dir() + "/imu_pubrecord.bin");
-  blackbox::lidar_resource::init(blackbox::log_dir() + "/lidar_resource.bin");
+  // session_dir() re-stamps the time on every call — capture once, reuse.
+  const std::string session = blackbox::session_dir();
+  blackbox::lidar::init(session + "/lidar_pubrecord.bin");
+  blackbox::imu::init(session + "/imu_pubrecord.bin");
+  blackbox::lidar_resource::init(session + "/lidar_resource.bin");
 }
 #endif
 
@@ -107,7 +110,7 @@ Lddc::~Lddc() {
   blackbox::imu::shutdown();
   blackbox::lidar_resource::shutdown();
 #endif
-  // mmap 공유 타임스탬프 해제 (LIV_handhold inline writer)
+  // Release the mmap shared timestamp (LIV_handhold inline writer)
   if (shared_stamp_ != nullptr) {
     munmap(shared_stamp_, sizeof(SharedTimestamp));
     shared_stamp_ = nullptr;
@@ -144,16 +147,16 @@ Lddc::~Lddc() {
 #endif
 }
 
-// LIV_handhold 방식 inline mmap writer
-// (A) 지점: SDK 콜백 → 드라이버 내부 → publish 직후 같은 함수 안에서 mmap 쓰기.
-// reader(image_mmap_stamper_node) 가 /home/$USER/timeshare 를 PROT_READ 로 매핑.
+// LIV_handhold-style inline mmap writer
+// Point (A): SDK callback → inside the driver → mmap write within the same function right after publish.
+// The reader (image_mmap_stamper_node) maps /home/$USER/timeshare as PROT_READ.
 void Lddc::TryOpenSharedMmap() {
   if (mmap_opened_) return;
   const char* home = std::getenv("HOME");
   std::string path = std::string(home && *home ? home : "/tmp") + "/timeshare";
   shared_fd_ = open(path.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
   if (shared_fd_ < 0) {
-    std::cerr << "[lddc] open('" << path << "') failed — mmap writer 비활성" << std::endl;
+    std::cerr << "[lddc] open('" << path << "') failed — mmap writer disabled" << std::endl;
     return;
   }
   if (ftruncate(shared_fd_, sizeof(SharedTimestamp)) != 0) {
@@ -174,7 +177,7 @@ void Lddc::TryOpenSharedMmap() {
 
 void Lddc::WriteSharedStamp(uint64_t ns) {
   if (shared_stamp_ != nullptr) {
-    // 64-bit aligned single store → aarch64/x86_64 에서 원자적
+    // 64-bit aligned single store → atomic on aarch64/x86_64
     shared_stamp_->low = static_cast<int64_t>(ns);
   }
 }
@@ -192,7 +195,7 @@ void Lddc::DistributePointCloudData(void) {
   if (!lds_) return;
   if (lds_->IsRequestExit()) return;
 
-  // 최초 호출 시 mmap 공유 파일 초기화 (LIV_handhold 방식 (A) inline writer)
+  // Initialize the mmap shared file on the first call (LIV_handhold-style (A) inline writer)
   TryOpenSharedMmap();
 
   lds_->pcd_semaphore_.Wait();
@@ -272,7 +275,7 @@ void Lddc::PublishPointcloud2(LidarDataQueue *queue, uint8_t index) {
     uint64_t timestamp = 0;
     InitPointcloud2Msg(pkg, cloud, timestamp);
     PublishPointcloud2Data(index, timestamp, cloud);
-    WriteSharedStamp(timestamp);  // mmap: 카메라가 읽을 최신 ns epoch
+    WriteSharedStamp(timestamp);  // mmap: latest ns epoch for the camera to read
   }
 }
 
@@ -286,7 +289,7 @@ void Lddc::PublishCustomPointcloud(LidarDataQueue *queue, uint8_t index) {
     InitCustomMsg(livox_msg, pkg, index);
     FillPointsToCustomMsg(livox_msg, pkg);
     PublishCustomPointData(livox_msg, index);
-    WriteSharedStamp(livox_msg.timebase);  // mmap: 카메라가 읽을 최신 ns epoch
+    WriteSharedStamp(livox_msg.timebase);  // mmap: latest ns epoch for the camera to read
   }
 }
 

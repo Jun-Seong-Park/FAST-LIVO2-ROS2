@@ -1,11 +1,11 @@
 // gprmc_feeder.cpp
 //
-// 책임 범위:
-//   - Synchro 인스턴스(직렬 포트 reader)는 그대로 사용
-//   - 한 번만 시작 (started_ flag) — 여러 LiDAR detection 콜백 중복 방어
-//   - GPRMC 콜백 안에서 SetLivoxLidarRmcSyncTime(handle, ...) 호출
+// Scope of responsibility:
+//   - Uses the Synchro instance (serial port reader) as-is
+//   - Starts only once (started_ flag) — guards against duplicate LiDAR detection callbacks
+//   - Calls SetLivoxLidarRmcSyncTime(handle, ...) inside the GPRMC callback
 //
-// 자세한 흐름은 gprmc_feeder.h 참조.
+// See gprmc_feeder.h for the detailed flow.
 
 #include "gprmc_feeder.h"
 
@@ -58,10 +58,10 @@ void GprmcFeeder::Configure(const std::string& port, int baud,
 void GprmcFeeder::OnLidarHandle(uint32_t handle) {
   if (!enabled_) return;
 
-  // 첫 호출에서만 Synchro 시작 — 멀티 lidar / 콜백 재발생 보호
+  // Start Synchro only on the first call — protects against multi-lidar / re-fired callbacks
   bool expected = false;
   if (!started_.compare_exchange_strong(expected, true)) {
-    handle_.store(handle);  // 후속 콜백에서도 handle 만 갱신
+    handle_.store(handle);  // On subsequent callbacks, only update the handle
     return;
   }
 
@@ -82,7 +82,7 @@ void GprmcFeeder::OnLidarHandle(uint32_t handle) {
   syn.SetBaudRate(ParseBaud(baud_local));
   syn.SetParity(ParseParity(parity_local));
 
-  // 콜백 안에서는 handle_ 을 매번 atomic 으로 읽어 최신값 사용
+  // Inside the callback, read handle_ atomically each time to use the latest value
   syn.SetSyncTimerCallback([this](const char* rmc, uint16_t rmc_length) {
     uint32_t h = handle_.load();
     if (h == 0) return;
@@ -90,7 +90,7 @@ void GprmcFeeder::OnLidarHandle(uint32_t handle) {
         h, rmc, rmc_length,
         [](livox_status status, uint32_t /*handle*/,
            LivoxLidarRmcSyncTimeResponse* /*data*/, void* /*client_data*/) {
-          (void)status;  // ack 만 — 응답은 무시
+          (void)status;  // ack only — ignore the response
         },
         nullptr);
   });
@@ -98,7 +98,7 @@ void GprmcFeeder::OnLidarHandle(uint32_t handle) {
   if (!syn.Start()) {
     std::cerr << "[gprmc_feeder] Synchro::Start failed (port="
               << port_local << ")" << std::endl;
-    started_.store(false);  // 다시 시도 가능하도록
+    started_.store(false);  // so it can be retried
   }
 }
 

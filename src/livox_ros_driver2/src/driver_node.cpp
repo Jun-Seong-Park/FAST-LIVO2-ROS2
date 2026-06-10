@@ -33,8 +33,8 @@ DriverNode& DriverNode::GetNode() noexcept {
 }
 
 DriverNode::~DriverNode() {
-  // GPRMC feeder 의 직렬포트 reader 스레드 먼저 끔.
-  // 그래야 SDK uninit 후 Synchro 가 살아있는 핸들에 더 이상 명령 안 보냄.
+  // Stop the GPRMC feeder's serial port reader thread first.
+  // That way Synchro no longer sends commands to a live handle after SDK uninit.
   GprmcFeeder::GetInstance().Stop();
 
   lddc_ptr_->lds_->RequestExit();

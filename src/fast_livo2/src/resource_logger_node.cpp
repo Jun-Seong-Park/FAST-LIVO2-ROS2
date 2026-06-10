@@ -4,8 +4,8 @@
 //   slam_proc.bin   per-process CPU/RSS for fast_livo2    (ProcRecord 48B)
 //   livox_proc.bin  per-process CPU/RSS for livox driver  (ProcRecord 48B)
 //
-// Spec: references/blackbox/spec/resource.md (확정 ABI + 함수 계약)
-// Sources/units: references/blackbox/findings/resource/measurements.md (실측 2026-05-21)
+// Spec: references/blackbox/spec/resource.md (finalized ABI + function contract)
+// Sources/units: references/blackbox/findings/resource/measurements.md (measured 2026-05-21)
 
 // C system headers
 #include <dirent.h>
@@ -787,7 +787,8 @@ public:
     const auto period_s  = declare_parameter<double>("sample_period_s", 1.0);
     const auto max_scan  = declare_parameter<int>("max_scan_pids", 4096);
 
-    const std::string dir = log_dir.empty() ? blackbox::log_dir() : log_dir;
+    // empty log_dir → fresh per-run session dir (~/.blackbox/log/<ts>-<pid>/)
+    const std::string dir = log_dir.empty() ? blackbox::session_dir() : log_dir;
     sampler_.init(dir, proc_prefixes, net_ifaces, static_cast<size_t>(max_scan));
 
     auto period = std::chrono::duration_cast<std::chrono::nanoseconds>(

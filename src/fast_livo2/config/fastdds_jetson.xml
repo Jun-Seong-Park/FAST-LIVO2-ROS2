@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <profiles xmlns="http://www.eprosima.com/XMLSchemas/fastRTPS_Profiles">
 
-  <!-- 대용량 image(SD 640x360x3 = 675KB > default SHM 512KB) overwrite로 인한
-       frame drop 방지: SHM segment를 64MB로 명시. default(512KB)는
-       useBuiltinTransports=false로 제거하고 아래 custom SHM만 사용. -->
+  <!-- Prevent frame drop caused by overwrite of large images (SD 640x360x3 = 675KB > default SHM 512KB):
+       set the SHM segment explicitly to 64MB. The default (512KB) is removed via
+       useBuiltinTransports=false, and only the custom SHM below is used. -->
   <transport_descriptors>
       <transport_descriptor>
           <transport_id>shm_big</transport_id>

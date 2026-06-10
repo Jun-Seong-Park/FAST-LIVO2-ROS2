@@ -2,6 +2,10 @@ cmake_minimum_required(VERSION 3.0)
 
 project(livox_sdk2)
 
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
 set(CMAKE_CXX_STANDARD 11)
 
 message(STATUS "main project dir: " ${PROJECT_SOURCE_DIR})

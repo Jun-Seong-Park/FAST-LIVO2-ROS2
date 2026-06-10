@@ -22,11 +22,11 @@ all in one Repository for FAST-LIVO2
 
 # 5. Prerequisited
 
-## 6.1 Ubuntu and ROS
+## 5.1 Ubuntu and ROS
 
 Ubuntu 22.04.  [ROS Installation](http://wiki.ros.org/ROS/Installation).
 
-## 6.2 PCL && Eigen && OpenCV
+## 5.2 PCL && Eigen && OpenCV
 
 PCL>=1.8, Follow [PCL Installation](https://pointclouds.org/).
 
@@ -34,7 +34,19 @@ Eigen>=3.3.4, Follow [Eigen Installation](https://eigen.tuxfamily.org/index.php?
 
 OpenCV>=4.2, Follow [Opencv Installation](http://opencv.org/).
 
-## 6.4 Sophus
+## 5.3 ETC
+```bash
+sudo apt install ros-humble-compressed-image-transport
+```
+
+# 6. Install
+```bash
+cd ~/
+git clone 
+```
+
+
+## 6.1 Sophus
 
 ```bash
 cd ~/FAST-LIVO2-ROS2/src/Sophus
@@ -42,7 +54,7 @@ mkdir build && cd build
 cmake .. && make -j$(nproc)
 sudo make install
 ```
-## 6.5 Vikit
+## 6.2 Vikit
 
 ```bash
 cd ~/FAST-LIVO2-ROS2/src/rpg_vikit/vikit_common
@@ -51,53 +63,56 @@ cmake .. && make -j$(nproc)
 sudo make install
 ```
 
-```bash
-source install/setup.bash
-colcon build --symlink-install --packages-select vikit_ros
-```
-## 6.6 Livox-SDK2
+## 6.3 Livox-SDK2
 Custom made livox ros driver2!! for hardware synchro and logging
 
 ```bash
 cd ~/FAST-LIVO2-ROS2/src/Livox-SDK2
 mkdir build
 cd build
-cmake .. && make -j
+cmake .. && make -j$(nproc)
 sudo make install
 ```
 
-## 6.7 Sensor Pkg
-build sensor_ws
-- image_ros2_driver_sync: image driver which shares mmap timestamp and hardware triggered
-- livox_ros_driver2_sync: lidar ros2 driver which shares mmap timestamp
-- mrb: mmap ring blackbox
+## 6.4 Sensor Pkg
+- econ_ros2_driver: See3CAM_24CUG image driver (GStreamer, hardware triggered, mmap timestamp)
+- livox_ros_driver2: LiDAR ROS2 driver (mmap timestamp)
+
+Each package carries its own vendored blackbox header (fixed-size mmap logger) — no shared logging package, so every package builds standalone.
 
 ```bash
 cd ~/FAST-LIVO2-ROS2
-colcon build
+colcon build --symlink-install 
 ```
 
-## 6.8 Other Dependencies
+# 7. Flashing STM32
+Firmware source is located in `LIV_handhold/stm32_timersync-open/`. build, and flash to the Blue Pill. 
+
+# 8. Setup Jetson Orin NGX024
+Run all one-time setup scripts (udev rules, jetson_clocks, FastDDS socket buffer):
+
 ```bash
-sudo apt install ros-humble-compressed-image-transport
+sudo bash src/scripts/setup_all.sh
 ```
 
-## 6.8 Flashing STM32
-
-
-## 6.9 Setup Jetson Orin NGX024
-we must pin our hardwared file descriptor
-
-
-# 6. Run with Device
+# 9. Run with Device
 ```bash
 source install/setup.bash
 ros2 launch fast_livo2 launch.py
 ```
+# 10. Analyze Log
 
-# 7. Run with Demo
-# 8. Analyze Log
-# 9. License
+Each node writes its blackbox records to a fresh per-run session directory:
+
+```
+~/.blackbox/log/<YYYY-MM-DD-HH-MM-SS>-<pid>/   # .bin records, one dir per process per run
+```
+
+Old sessions are never overwritten — delete them manually when no longer needed.
+
+Analysis scripts live in `blackbox/` (repo root); plots are written to `blackbox/Log/` (git-ignored).
+
+# 11. License
 
 The source code of this package is released under the [**GPLv2**](http://www.gnu.org/licenses/) license. For commercial use, please contact <zhengcr@connect.hku.hk> and Prof. Fu Zhang at <fuzhang@hku.hk> to discuss an alternative license.
 

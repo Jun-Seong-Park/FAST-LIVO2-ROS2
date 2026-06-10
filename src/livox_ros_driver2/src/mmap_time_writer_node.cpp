@@ -1,21 +1,21 @@
 /**
  * @file mmap_time_writer_node.cpp
- * @brief LIV_handhold 방식 mmap 타임스탬프 writer (ROS2)
+ * @brief LIV_handhold-style mmap timestamp writer (ROS2)
  *
- * `/livox/lidar` (CustomMsg) 를 구독하여 메시지 도착 직후
- * `/home/$USER/timeshare` 파일에 mmap 된 구조체의 `low` 필드에
- * `msg->timebase` (ns, GPS epoch) 를 쓴다.
+ * Subscribes to `/livox/lidar` (CustomMsg) and, immediately upon message arrival,
+ * writes `msg->timebase` (ns, GPS epoch) into the `low` field of the struct
+ * mmap'd onto the `/home/$USER/timeshare` file.
  *
- * 동일 파일을 reader 가 mmap 으로 읽어 카메라 프레임 stamp 로 사용함으로써
- * 두 센서가 같은 time domain 을 공유한다.
+ * A reader mmaps the same file and uses it as the camera frame stamp, so that
+ * the two sensors share the same time domain.
  *
- * 구조체 레이아웃은 LIV_handhold 의
- *   livox_ros_driver2/src/lddc.cpp, mvs_ros_driver/src/grab_trigger.cpp 와
- * 100% 호환 (`int64_t high; int64_t low;`).
+ * The struct layout is 100% compatible with LIV_handhold's
+ *   livox_ros_driver2/src/lddc.cpp and mvs_ros_driver/src/grab_trigger.cpp
+ * (`int64_t high; int64_t low;`).
  *
- * 모든 경로는 파라미터로 외부화:
- *   - shared_file : mmap 대상 파일 경로 (default: /home/$USER/timeshare)
- *   - input_topic : 구독할 CustomMsg 토픽 (default: /livox/lidar)
+ * All paths are externalized as parameters:
+ *   - shared_file : mmap target file path (default: /home/$USER/timeshare)
+ *   - input_topic : CustomMsg topic to subscribe to (default: /livox/lidar)
  */
 
 #include <rclcpp/rclcpp.hpp>
@@ -69,7 +69,7 @@ public:
 
     if (!open_shared_mmap()) {
       RCLCPP_FATAL(get_logger(),
-                   "mmap writer 초기화 실패 — 종료");
+                   "mmap writer initialization failed — exiting");
       throw std::runtime_error("mmap init failed");
     }
 
@@ -90,8 +90,8 @@ public:
 private:
   bool open_shared_mmap()
   {
-    // LIV_handhold 원본과 동일 모드: O_CREAT | O_RDWR | O_TRUNC, 0666.
-    // O_TRUNC 는 초기화용 — 파일 길이를 구조체 크기만큼 재확보.
+    // Same mode as the LIV_handhold original: O_CREAT | O_RDWR | O_TRUNC, 0666.
+    // O_TRUNC is for initialization — resize the file length to the struct size.
     fd_ = open(shared_file_.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0666);
     if (fd_ < 0) {
       RCLCPP_ERROR(get_logger(), "open('%s') failed: %s",
@@ -99,7 +99,7 @@ private:
       return false;
     }
 
-    // 페이지 크기만큼 확장해야 mmap 이 유효. ftruncate 로 정확한 크기 확보.
+    // Must extend to the page size for mmap to be valid. ftruncate secures the exact size.
     if (ftruncate(fd_, sizeof(SharedTimestamp)) != 0) {
       RCLCPP_ERROR(get_logger(), "ftruncate failed: %s", std::strerror(errno));
       return false;
@@ -112,7 +112,7 @@ private:
       return false;
     }
 
-    // 초기값 0 으로 명시
+    // Explicitly initialize to 0
     auto* slot = static_cast<SharedTimestamp*>(mapped_);
     slot->high = 0;
     slot->low = 0;
@@ -123,8 +123,8 @@ private:
   {
     if (mapped_ == MAP_FAILED || mapped_ == nullptr) return;
 
-    // timebase 는 첫 포인트의 ns epoch (lidar GPS time).
-    // 64-bit aligned store → aarch64 / x86_64 에서 atomic.
+    // timebase is the ns epoch of the first point (lidar GPS time).
+    // 64-bit aligned store → atomic on aarch64 / x86_64.
     auto* slot = static_cast<SharedTimestamp*>(mapped_);
     slot->low = static_cast<int64_t>(msg->timebase);
 

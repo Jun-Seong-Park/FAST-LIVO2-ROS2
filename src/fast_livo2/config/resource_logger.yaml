@@ -10,5 +10,5 @@
       - "wlP1p1s0"
       - "tailscale0"
       - "lo"
-    log_dir: ""           # empty → blackbox::log_dir() = $HOME/FAST-LIVO2-ROS2/blackbox/log
+    log_dir: ""           # empty → blackbox::session_dir() = ~/.blackbox/log/<YYYY-MM-DD-HH-MM-SS>-<pid>/
     max_scan_pids: 4096

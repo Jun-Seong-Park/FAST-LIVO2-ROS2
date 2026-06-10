@@ -353,10 +353,10 @@ double VIOManager::calculateNCC(float *ref_patch, float *cur_patch, int patch_si
 void VIOManager::retrieveFromVisualSparseMap(cv::Mat img, vector<pointWithVar> &pg, const unordered_map<VOXEL_LOCATION, VoxelOctoTree *> &plane_map)
 { 
   /*
-  depth 이미지 생성: lidar point 를 카메라에 투영
-  sub_feat_map 구성, 
-  Raycasting : 가려진 visual point 제거, 
-  affine warp: 참조 patch 를 현재 프레임 시점에 맞게 변환할 행렬 
+  Build the depth image: project LiDAR points onto the camera
+  Build sub_feat_map,
+  Raycasting: remove occluded visual points,
+  affine warp: matrix that warps the reference patch to the current frame's viewpoint
   */
   if (feat_map.size() <= 0) return;
   double ts0 = omp_get_wtime();

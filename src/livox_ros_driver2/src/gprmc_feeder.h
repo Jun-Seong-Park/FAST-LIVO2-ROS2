@@ -1,16 +1,16 @@
 // gprmc_feeder.h
 //
-// 호스트 직렬포트에서 GPRMC 한 줄씩 읽어 LiDAR 에 forward (SDK 의
-// SetLivoxLidarRmcSyncTime 호출).  livox-gps-sync.service 가 하던 일을
-// 드라이버 안으로 흡수.
+// Reads GPRMC line by line from the host serial port and forwards it to the LiDAR
+// (calls the SDK's SetLivoxLidarRmcSyncTime).  Absorbs the work that
+// livox-gps-sync.service used to do into the driver.
 //
-// 흐름:
-//   1. DriverNode 가 ROS param 읽어 Configure(port, baud, enabled) 호출.
-//   2. SDK 의 LidarInfoChangeCallback 안에서 OnLidarHandle(handle) 호출
-//      → 첫 호출 시 Synchro 스레드 시작, 그 핸들로 GPRMC forward 시작.
-//   3. 드라이버 종료 시 Stop().
+// Flow:
+//   1. DriverNode reads ROS params and calls Configure(port, baud, enabled).
+//   2. OnLidarHandle(handle) is called inside the SDK's LidarInfoChangeCallback
+//      → on the first call, starts the Synchro thread and begins forwarding GPRMC with that handle.
+//   3. Stop() on driver shutdown.
 //
-// `enabled = false` 면 일체 작동 안 함 (원본 vanilla 와 동일).
+// If `enabled = false`, nothing runs at all (same as the vanilla original).
 
 #pragma once
 

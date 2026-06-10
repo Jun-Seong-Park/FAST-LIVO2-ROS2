@@ -71,7 +71,7 @@ STREAM_MAP = {
         "sub_file": "image_subrecord.bin",
         "pub_dtype": PUB_IMAGE_48,
         "pub_t_col": "t_pub_ns",
-        "fps":      10,    # ext trigger 10 Hz (sensor hardware 60 Hz와 무관)
+        "fps":      10,    # ext trigger 10 Hz (independent of sensor hardware 60 Hz)
     },
 }
 
@@ -225,7 +225,7 @@ def cmp_plot(stream: str, pub: np.ndarray, sub: np.ndarray,
     ax2.set_xlabel('Time [sec]', fontsize=12)
     _style(ax2)
 
-    # ── x축 범위: FAST-LIVO2 active 구간으로 제한 ────────────────────────────
+    # ── x-axis range: limited to the FAST-LIVO2 active interval ──────────────
     ax2.set_xlim(t_first_sub_s, t_last_sub_s)
 
     # ── caption: explicit threshold definition ────────────────────────────────

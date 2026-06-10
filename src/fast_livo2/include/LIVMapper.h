@@ -174,8 +174,8 @@ public:
   rclcpp::Subscription<sensor_msgs::msg::Imu>::SharedPtr sub_imu;
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr sub_img;
 
-  // image PSN(=RTPS writerSN) 추적: callback 진입한 frame 의 publisher 시퀀스.
-  // gap > 0 = publisher 가 send 했는데 이 callback 에 안 들어온 frame 수.
+  // Track image PSN (= RTPS writerSN): publisher sequence of frames that entered the callback.
+  // gap > 0 = number of frames the publisher sent but that never reached this callback.
   uint64_t last_img_psn_{0};
   uint64_t img_psn_gap_total_{0};
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pubLaserCloudFullRes;

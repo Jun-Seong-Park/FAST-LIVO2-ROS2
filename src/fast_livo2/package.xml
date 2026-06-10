@@ -30,7 +30,6 @@
   <depend>pcl_ros</depend>
   <depend>pcl_conversions</depend>
   <depend>livox_ros_driver2</depend>
-  <depend>blackbox</depend>
   <depend>vikit_common</depend>
   <depend>vikit_ros</depend>
   <depend>cv_bridge</depend>

@@ -59,7 +59,7 @@ assert DT_PUB.itemsize == 24
 
 # ────────────────────────────────────────────────────────────
 # plot target periods [ms] — match each stream's publish period
-# tol_pct: y-zoom half-width for Stamp Diff plot (status는 diff_status가 별도 판정)
+# tol_pct: y-zoom half-width for Stamp Diff plot (status is judged separately by diff_status)
 # ────────────────────────────────────────────────────────────
 CAM_TARGET_MS   = 100.0
 LIDAR_TARGET_MS = 100.0
@@ -67,7 +67,7 @@ LIDAR_TOL_PCT   = 2.0
 IMU_TARGET_MS   = 5.0
 IMU_TOL_PCT     = 30.0
 
-# diff_status thresholds (% max-dev vs target). 동시에 status_ylim zoom 폭으로도 사용.
+# diff_status thresholds (% max-dev vs target). Also used as the status_ylim zoom width.
 STATUS_PCT = {'GOOD': 2.0, 'WARN': 5.0}
 
 
@@ -101,8 +101,8 @@ def savefig(fig, path: Path):
 # ────────────────────────────────────────────────────────────
 # status thresholds (cascading max-deviation vs reference)
 # ────────────────────────────────────────────────────────────
-# 모든 값이 ref ±GOOD% 안 → GOOD. 하나라도 벗어나면 ±WARN% 로 판단 → WARN.
-# 하나라도 벗어나면 BAD.
+# All values within ref ±GOOD% → GOOD. If any exceeds, judge against ±WARN% → WARN.
+# If any exceeds that too, BAD.
 def diff_status(values: np.ndarray, ref: float) -> str:
     if ref <= 0 or len(values) == 0:
         return 'GOOD'
@@ -113,7 +113,7 @@ def diff_status(values: np.ndarray, ref: float) -> str:
 
 
 def status_ylim(ax, target_ms: float, status: str) -> None:
-    """GOOD: ±2% zoom, WARN: ±5% zoom, BAD: auto (data 끝까지)."""
+    """GOOD: ±2% zoom, WARN: ±5% zoom, BAD: auto (full data range)."""
     if status == 'BAD':
         return
     pct = STATUS_PCT[status] / 100.0

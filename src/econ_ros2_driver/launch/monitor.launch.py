@@ -9,9 +9,9 @@ from launch_ros.actions import Node
 
 
 def make_monitor_node(encoding):
-    # econ_monitor = src/image_viewer.cpp. encoding 에 따라 raw(Image) 또는
-    # compressed(CompressedImage) 를 best_effort 로 구독해 화면(cv::imshow)에 띄우고
-    # 수신 fps/Mbps 를 로깅한다. topic 기본값은 노드가 encoding 에 맞춰 고른다.
+    # econ_monitor = src/image_viewer.cpp. Depending on encoding, subscribes best_effort
+    # to raw(Image) or compressed(CompressedImage), displays it on screen (cv::imshow),
+    # and logs received fps/Mbps. The default topic is chosen by the node based on encoding.
     return Node(
         package="econ_ros2_driver",
         executable="econ_monitor",
@@ -23,7 +23,7 @@ def make_monitor_node(encoding):
 
 
 def launch_setup(context, *args, **kwargs):
-    # client 인자를 실제 문자열로 푼다: local = Jetson 내부 loopback / server = 외부 PC.
+    # Resolve the client argument to its actual string: local = Jetson-internal loopback / server = external PC.
     client = LaunchConfiguration("client").perform(context)
 
     valid_clients = ("local", "server")
@@ -32,14 +32,14 @@ def launch_setup(context, *args, **kwargs):
 
     is_local = client == "local"
 
-    # encoding 인자를 푼다: raw = sensor_msgs/Image / compressed = CompressedImage.
+    # Resolve the encoding argument: raw = sensor_msgs/Image / compressed = CompressedImage.
     encoding = LaunchConfiguration("encoding").perform(context)
 
     valid_encodings = ("raw", "compressed")
     if encoding not in valid_encodings:
         raise RuntimeError(f"encoding must be one of {valid_encodings}, got '{encoding}'")
 
-    # FastDDS xml 이름은 모두 config.yaml 에 있으므로 거기서 읽는다.
+    # The FastDDS xml names are all in config.yaml, so read them from there.
     econ_driver_path = get_package_share_directory("econ_ros2_driver")
     config_dir  = os.path.join(econ_driver_path, "config")
     config_path = os.path.join(config_dir, "config.yaml")
@@ -65,7 +65,7 @@ def generate_launch_description():
     client_arg = DeclareLaunchArgument(
         "client",
         default_value="local",
-        description="local = Jetson 내부 loopback / server = 외부 PC 수신",
+        description="local = Jetson-internal loopback / server = external PC receiving",
     )
 
     encoding_arg = DeclareLaunchArgument(

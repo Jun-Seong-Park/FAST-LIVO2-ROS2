@@ -1,17 +1,17 @@
-// livox_idle — MID-360 lifecycle 도구 + HMS code dump
+// livox_idle — MID-360 lifecycle tool + HMS code dump
 //
-// 모드:
-//   --info     : work_state, time_sync_type, hms_code 출력 (조회만)
-//   --wake     : SetWorkMode(Normal=0x01) — SAMPLING 진입 시도
-//   --standby  : SetWorkMode(WakeUp=0x02) — IDLE/Standby 진입 시도
-//   --sleep    : SetWorkMode(Sleep=0x03)  — MID-360 에서는 무효일 수 있음
-//   --reboot   : LivoxLidarRequestReboot — cmd 0x0200 펌웨어 reboot
+// Modes:
+//   --info     : output work_state, time_sync_type, hms_code (query only)
+//   --wake     : SetWorkMode(Normal=0x01) — attempt to enter SAMPLING
+//   --standby  : SetWorkMode(WakeUp=0x02) — attempt to enter IDLE/Standby
+//   --sleep    : SetWorkMode(Sleep=0x03)  — may be ineffective on the MID-360
+//   --reboot   : LivoxLidarRequestReboot — cmd 0x0200 firmware reboot
 //
-// 핵심 변경 vs 이전 버전:
-//   - QueryInfoCallback 안에 key 0x8011 (hms_code[8]) 파싱/출력 추가
-//   - WorkModeCallback 에 response->ret_code, response->error_key 출력 추가
+// Key changes vs previous version:
+//   - add parsing/output of key 0x8011 (hms_code[8]) inside QueryInfoCallback
+//   - add output of response->ret_code, response->error_key to WorkModeCallback
 //
-// HMS code 형식 (livox_eth_protocol_mid360.md, hms_code_mid360.html):
+// HMS code format (livox_eth_protocol_mid360.md, hms_code_mid360.html):
 //   uint32 = (id << 16) | (reserved << 8) | level
 //   level: 0x01 Info / 0x02 Warning / 0x03 Error / 0x04 Fatal
 
@@ -117,7 +117,7 @@ void QueryInfoCallback(livox_status status, uint32_t /*handle*/,
           printf("version_hardware=%u.%u.%u.%u\n", val[0], val[1], val[2], val[3]);
         }
       } else {
-        // 미처리 키 디버그용 — 작은 노출
+        // for debugging unhandled keys — minimal exposure
         // printf("(key=0x%04X len=%u)\n", key, len);
       }
       offset += 4 + len;

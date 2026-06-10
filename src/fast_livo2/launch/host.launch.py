@@ -1,14 +1,14 @@
-"""서버 PC(host) 전용 launch.
+"""Launch dedicated to the server PC (host).
 
-Jetson 의 monitor 노드가 /orin22/* 로 재발행한 토픽을 수신해 RViz 로 시각화한다.
+Receives the topics that the Jetson monitor node re-publishes under /orin22/* and visualizes them in RViz.
 
-환경 변수:
-  FASTRTPS_DEFAULT_PROFILES_FILE — fastdds_server.xml (unicast peer 설정)
+Environment variables:
+  FASTRTPS_DEFAULT_PROFILES_FILE — fastdds_server.xml (unicast peer config)
 
-토픽 remapping:
-  monitor 노드가 /<robot_name>/* 로 재발행한 토픽을 RViz2 노드 remapping 으로 원래 이름으로 되돌린다.
-  대상: /tf, /tf_static, /cloud_registered, /aft_mapped_to_init, /path, /rgb_img
-  robot_name 이 바뀌면 launch argument 로 오버라이드한다.
+Topic remapping:
+  The RViz2 node remaps the topics the monitor node re-published under /<robot_name>/* back to their original names.
+  Targets: /tf, /tf_static, /cloud_registered, /aft_mapped_to_init, /path, /rgb_img
+  If robot_name changes, override it via a launch argument.
 """
 
 import os
@@ -29,14 +29,14 @@ def generate_launch_description():
     robot_name_arg = DeclareLaunchArgument(
         "robot_name",
         default_value="orin22",
-        description="Jetson 의 robot_name (monitor.yaml 과 일치해야 함)",
+        description="Jetson robot_name (must match monitor.yaml)",
     )
 
     rviz_arg = DeclareLaunchArgument(
         "rviz",
         default_value="true",
         choices=["true", "false"],
-        description="RViz2 실행 여부",
+        description="Whether to launch RViz2",
     )
 
     robot_name = LaunchConfiguration("robot_name")

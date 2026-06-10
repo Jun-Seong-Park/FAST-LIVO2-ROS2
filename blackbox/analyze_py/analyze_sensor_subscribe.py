@@ -41,7 +41,7 @@ CAM_TARGET_MS   = 100.0
 LIDAR_TARGET_MS = 100.0
 IMU_TARGET_MS   = 5.0
 
-# diff_status thresholds (% max-dev vs target). 동시에 status_ylim zoom 폭으로도 사용.
+# diff_status thresholds (% max-dev vs target). Also used as the status_ylim zoom width.
 STATUS_PCT = {'GOOD': 2.0, 'WARN': 5.0}
 
 
@@ -69,8 +69,8 @@ def savefig(fig, path: Path):
 # ────────────────────────────────────────────────────────────
 # status thresholds (cascading max-deviation vs reference)
 # ────────────────────────────────────────────────────────────
-# 모든 값이 ref ±GOOD% 안 → GOOD. 하나라도 벗어나면 ±WARN% 로 판단 → WARN.
-# 하나라도 벗어나면 BAD.
+# All values within ref ±GOOD% → GOOD. If any exceeds, judge against ±WARN% → WARN.
+# If any exceeds that too, BAD.
 def diff_status(values: np.ndarray, ref: float) -> str:
     if ref <= 0 or len(values) == 0:
         return 'GOOD'
@@ -81,7 +81,7 @@ def diff_status(values: np.ndarray, ref: float) -> str:
 
 
 def status_ylim(ax, target_ms: float, status: str) -> None:
-    """GOOD: ±2% zoom, WARN: ±5% zoom, BAD: auto (data 끝까지)."""
+    """GOOD: ±2% zoom, WARN: ±5% zoom, BAD: auto (full data range)."""
     if status == 'BAD':
         return
     pct = STATUS_PCT[status] / 100.0
@@ -143,7 +143,7 @@ def sub_plot_combined(a: np.ndarray, m: dict, out_path: Path,
 
     fig, axs = plt.subplots(3, 2, figsize=(12, 10), dpi=150)
 
-    # ── [0,0] Stamp Delta Full Range (placeholder, 나중에 교체 예정) ──────────
+    # ── [0,0] Stamp Delta Full Range (placeholder, to be replaced later) ──────
     ax = axs[0, 0]
     ax.plot(t_axis, stamp_diff_ms, linewidth=1.5, color='C3')
     _title(ax, f'{label}  Stamp Delta Full Range')

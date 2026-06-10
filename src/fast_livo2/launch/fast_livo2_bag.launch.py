@@ -1,8 +1,5 @@
 """
-FAST-LIVO2 only launch file.
-
-This launch starts only the FAST-LIVO2 mapping node. Camera, LiDAR, and IMU
-publishers must be launched separately.
+FAST-LIVO2 when using bag file (dds setting)
 """
 
 import os

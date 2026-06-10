@@ -1,7 +1,7 @@
-"""FAST-LIVO2 모니터링 릴레이 노드 launch.
+"""Launch for the FAST-LIVO2 monitoring relay node.
 
-FAST-LIVO2 본체는 루프백으로 격리하고, 이 monitor 노드만 외부 네트워크로 토픽을
-재발행한다. FastDDS 유니캐스트(fastdds_monitor.xml) 로 서버 PC 와 직접 peer 연결한다.
+The FAST-LIVO2 core is isolated on loopback, and only this monitor node re-publishes
+topics onto the external network. It peers directly with the server PC over FastDDS unicast (fastdds_monitor.xml).
 """
 
 import os

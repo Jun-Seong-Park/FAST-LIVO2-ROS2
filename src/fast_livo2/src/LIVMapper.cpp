@@ -61,9 +61,11 @@ LIVMapper::LIVMapper(rclcpp::Node::SharedPtr &node, std::string node_name)
   p_imu.reset(new ImuProcess());
 
   readParameters(this->node);
-  blackbox::sub_lidar::init(blackbox::log_dir() + "/lidar_subrecord.bin");
-  blackbox::sub_imu::init(blackbox::log_dir() + "/imu_subrecord.bin");
-  blackbox::sub_image::init(blackbox::log_dir() + "/image_subrecord.bin");
+  // session_dir() re-stamps the time on every call — capture once, reuse.
+  const std::string session = blackbox::session_dir();
+  blackbox::sub_lidar::init(session + "/lidar_subrecord.bin");
+  blackbox::sub_imu::init(session + "/imu_subrecord.bin");
+  blackbox::sub_image::init(session + "/image_subrecord.bin");
   VoxelMapConfig voxel_config;
   loadVoxelConfig(this->node, voxel_config);
 
@@ -361,8 +363,8 @@ void LIVMapper::initializeSubscribersAndPublishers(rclcpp::Node::SharedPtr &node
   }
   sub_imu = this->node->create_subscription<sensor_msgs::msg::Imu>(imu_topic, sensor_qos, std::bind(&LIVMapper::imu_cbk, this, std::placeholders::_1));
 
-  // image subscriber 에 DDS reader 단 lost-sample 카운터 박기.
-  // SHM/UDP 무관, RTPS sequence gap 으로 rmw 가 인지한 누락만 집계 → drop layer 분리용.
+  // Attach a DDS-reader lost-sample counter to the image subscriber.
+  // Independent of SHM/UDP; counts only drops the rmw detected via RTPS sequence gaps → to isolate the drop layer.
   rclcpp::SubscriptionOptions img_sub_opts;
   img_sub_opts.event_callbacks.message_lost_callback =
       [logger = this->node->get_logger()](rclcpp::QOSMessageLostInfo & info) {
@@ -1118,8 +1120,8 @@ void LIVMapper::img_cbk(const sensor_msgs::msg::Image::ConstSharedPtr &msg_in,
 {
   blackbox::sub_image::log(StampNs(msg_in->header.stamp));
 
-  // PSN(publisher RTPS writerSN) gap = publisher 가 send 했는데 이 callback 에 안 들어온 frame 수.
-  // last_img_psn_ == 0 인 첫 진입은 건너뜀 (비교 기준 없음).
+  // PSN (publisher RTPS writerSN) gap = number of frames the publisher sent but that never reached this callback.
+  // Skip the first entry where last_img_psn_ == 0 (no baseline to compare against).
   const uint64_t psn = info.get_rmw_message_info().publication_sequence_number;
   if (last_img_psn_ != 0 && psn > last_img_psn_ + 1) {
     const uint64_t gap = psn - last_img_psn_ - 1;
@@ -1222,9 +1224,9 @@ void LIVMapper::img_cbk(const sensor_msgs::msg::Image::ConstSharedPtr &msg_in,
 }
 
 /**
- * @brief LiDAR·IMU·이미지 버퍼에서 ESIKF 한 스텝치 측정 묶음을 시간순으로 잘라낸다.
- * @param[out] meas 잘라낸 측정 패킷을 채워 넣을 그룹 (LIO/VIO 플래그·IMU·포인트클라우드 포함)
- * @return 한 스텝치 데이터가 준비되면 true, 버퍼 부족이나 동기화 대기면 false
+ * @brief Slices one ESIKF-step measurement bundle in time order from the LiDAR/IMU/image buffers.
+ * @param[out] meas Group to fill with the sliced measurement packet (includes LIO/VIO flag, IMU, point cloud)
+ * @return true if one step's worth of data is ready, false if the buffers are short or still waiting on sync
  */
 bool LIVMapper::sync_packages(LidarMeasureGroup &meas)
 {

@@ -1,6 +1,6 @@
 # ROS2 Only
-# lddc.cpp 에 mmap inline timestamp writer 통합된 fork.
-# custom msg(CustomMsg/CustomPoint)는 이 패키지가 직접 생성한다.
+# Fork with the mmap inline timestamp writer integrated into lddc.cpp.
+# This package generates the custom msgs (CustomMsg/CustomPoint) itself.
 cmake_minimum_required(VERSION 3.14)
 
 include(cmake/version.cmake)
@@ -19,7 +19,7 @@ if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)
 endif()
 
-# ROS2 플래그 (원본의 #ifdef BUILDING_ROS2 활성)
+# ROS2 flag (enables the original's #ifdef BUILDING_ROS2)
 add_definitions(-DBUILDING_ROS2)
 
 find_package(ament_cmake_auto REQUIRED)
@@ -28,9 +28,8 @@ find_package(PCL REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(builtin_interfaces REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
-find_package(blackbox REQUIRED)             # publish trace blackbox
 
-# check apr --> 이거 뭔지 확인 필요
+# check apr --> need to confirm what this is
 find_package(PkgConfig)
 pkg_check_modules(APR apr-1)
 if (APR_FOUND)
@@ -38,9 +37,9 @@ if (APR_FOUND)
   message(${APR_LIBRARIES})
 endif (APR_FOUND)
 
-# custom msg 직접 생성.
-# 인터페이스 타겟 이름은 livox_interfaces2, LIBRARY_NAME 으로 네임스페이스를
-# livox_ros_driver2 로 고정 → livox_ros_driver2::msg::CustomMsg.
+# Generate the custom msgs directly.
+# The interface target name is livox_interfaces2; LIBRARY_NAME pins the namespace
+# to livox_ros_driver2 → livox_ros_driver2::msg::CustomMsg.
 set(LIVOX_INTERFACES livox_interfaces2)
 rosidl_generate_interfaces(${LIVOX_INTERFACES}
   "msg/CustomPoint.msg"
@@ -49,7 +48,7 @@ rosidl_generate_interfaces(${LIVOX_INTERFACES}
   LIBRARY_NAME ${PROJECT_NAME}
 )
 
-# Livox SDK2 — /usr/local/lib 에 설치되어 있다고 가정
+# Livox SDK2 — assumed to be installed in /usr/local/lib
 find_library(LIVOX_LIDAR_SDK_LIBRARY liblivox_lidar_sdk_shared.so /usr/local/lib REQUIRED)
 find_path(LIVOX_LIDAR_SDK_INCLUDE_DIR
   NAMES "livox_lidar_api.h" "livox_lidar_def.h"
@@ -58,7 +57,7 @@ find_path(LIVOX_LIDAR_SDK_INCLUDE_DIR
 link_directories(${PCL_LIBRARY_DIRS})
 add_definitions(${PCL_DEFINITIONS})
 
-# === 드라이버 라이브러리 (lddc.cpp 에 mmap inline writer 포함된 버전) ===
+# === Driver library (version with the mmap inline writer included in lddc.cpp) ===
 ament_auto_add_library(${PROJECT_NAME} SHARED
   src/livox_ros_driver2.cpp
   src/lddc.cpp
@@ -79,16 +78,16 @@ ament_auto_add_library(${PROJECT_NAME} SHARED
   src/call_back/lidar_common_callback.cpp
   src/call_back/livox_lidar_callback.cpp
 
-  # GPRMC time-sync feeder (livox-gps-sync.service 흡수)
+  # GPRMC time-sync feeder (absorbs livox-gps-sync.service)
   src/synchro.cpp
   src/gprmc_feeder.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE ${livox_sdk_INCLUDE_DIRS})
 
-# 자체 생성한 custom msg typesupport 연결 (Humble)
+# Link the self-generated custom msg typesupport (Humble)
 rosidl_get_typesupport_target(cpp_typesupport_target ${LIVOX_INTERFACES} "rosidl_typesupport_cpp")
-target_link_libraries(${PROJECT_NAME} "${cpp_typesupport_target}" blackbox::blackbox)
+target_link_libraries(${PROJECT_NAME} "${cpp_typesupport_target}")
 
 target_include_directories(${PROJECT_NAME} PUBLIC
   ${PCL_INCLUDE_DIRS}
@@ -96,6 +95,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC
   ${LIVOX_LIDAR_SDK_INCLUDE_DIR}
   3rdparty
   src
+  include          # vendored blackbox header (include/blackbox/blackbox.hpp)
 )
 
 target_link_libraries(${PROJECT_NAME}

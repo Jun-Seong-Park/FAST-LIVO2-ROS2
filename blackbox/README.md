@@ -226,14 +226,21 @@ blackbox::<stream>::shutdown();   // stop writer + final fdatasync + munmap + cl
 
 | Node | Stream(s) | Calls |
 |---|---|---|
-| `see3cam24cug_trig.cpp` (camera) | `image` | `init` → `log_cbk` → `log_pub` → `shutdown` |
+| `econ_ros2_driver.cpp` (camera) | `image` | `init` → `log_cbk` → `log_pub` → `shutdown` |
 | `lddc.cpp` (Livox driver) | `lidar`, `imu` | `init` → `log(stamp)` → `shutdown` |
 | `lds_lidar.cpp` (Livox device) | `lidar_resource` | `log(temp, diag, state, hms)` |
 | `LIVMapper.cpp` (fast_livo2) | `sub_lidar`, `sub_imu`, `sub_image` | `init` → `log(stamp)` → `shutdown` |
-| `resource_logger` | `resource` | `init(dir)` → 1 Hz sample → `shutdown` |
+| `resource_logger` (fast_livo2) | `resource` | `init(dir)` → 1 Hz sample → `shutdown` |
 
-Paths come from `blackbox::log_dir()`, so a caller writes
-`blackbox::log_dir() + "/<name>.bin"`.
+Each header is vendored per package (no shared logging package): the camera
+driver owns the pub-image records, the Livox driver owns the pub-lidar/imu
+records, and fast_livo2 owns the sub + host-resource records.
+
+Paths come from `blackbox::session_dir()` — a fresh per-run directory
+`~/.blackbox/log/<YYYY-MM-DD-HH-MM-SS>-<pid>/`. The caller captures it ONCE in
+the constructor (it re-stamps the time on every call) and writes
+`session + "/<name>.bin"`. Old sessions are never overwritten, so a crash
+followed by a restart cannot destroy the evidence of the crashed run.
 
 ## The camera cascade — the one exception
 
@@ -252,10 +259,11 @@ That is why `ImagePubRecord` carries `gst_done`/`ros_done`: two threads, one
 record, and the last byte written marks it complete.
 
 ```cpp
-// ctor
-blackbox::image::init(blackbox::log_dir() + "/see3cam24cug_trig_image_pub.bin");
+// ctor — capture the session dir once, reuse for every artifact
+const std::string session = blackbox::session_dir();
+blackbox::image::init(session + "/econ_ros2_driver_pub.bin");
 // cbk thread
-size_t idx = blackbox::image::log_cbk(header_stamp_ns, t_dqbuf_ns);
+size_t idx = blackbox::image::log_cbk(header_stamp_ns, t_capture_ns);
 // publish loop, immediately after publish()
 blackbox::image::log_pub(idx);
 // dtor
@@ -267,10 +275,13 @@ blackbox::image::shutdown();
 Host resources are not a callback hot path, so they get a dedicated node. It reads
 its config (`proc_prefixes`, `net_ifaces`, `sample_period_s`, `log_dir`), polls
 `/proc` and `/sys` once per second, and writes all four resource files on the same
-tick. Launch it alongside the sensor stack:
+tick. It lives in the fast_livo2 package as a standalone executable — launch it
+alongside the sensor stack:
 
 ```bash
-ros2 launch blackbox launch.py
+ros2 launch fast_livo2 resource_logger.launch.py
+# or directly:
+ros2 run fast_livo2 resource_logger
 ```
 
 
@@ -334,25 +345,31 @@ subtract directly. That is what makes cross-stream latency measurable at all.
 
 ## Where it lives
 
-Blackbox is a header-only `INTERFACE` library. `BLACKBOX_ROOT_DIR` is injected by
-CMake as the package source path, so `log_dir()` / `plots_dir()` / `scripts_dir()`
-resolve to `src/blackbox/{log, plots, scripts}`. A caller includes
-`<blackbox/blackbox.hpp>` and links the interface target — nothing to compile.
+Blackbox is a header-only, self-contained `.hpp` vendored into each package that
+logs (`econ_ros2_driver/include/blackbox.hpp`,
+`livox_ros_driver2/include/blackbox/blackbox.hpp`,
+`fast_livo2/include/blackbox/blackbox.hpp`). Each copy carries only the records
+that package owns plus the shared Box mechanism — no shared package, no CMake
+target, nothing to link. A caller just includes the header.
 
 
 # 5. Analysis
 
 The read side. Binary in, PNG out. Four analyzers and one wrapper, all under
-`scripts/`.
+`analyze_py/` (this directory). Data is read from `~/.blackbox/log/<session>/`
+and plots are written to `Log/` (git-ignored).
 
-`plot.py` runs the four in sequence:
+> ⚠ The scripts still assume the old flat single-file layout — updating them to
+> pick the latest session dir per stream is a pending follow-up.
+
+`plot_all.py` runs the four in sequence:
 
 | # | Script | What it produces |
 |---|---|---|
-| 1 | `analyze_sensor_publish.py` | pub-side stats (image/lidar/imu) → `plots/{image,lidar,imu}/` |
-| 2 | `analyze_sensor_subscribe.py` | sub-side stats → same dirs |
+| 1 | `analyze_sensor_publish.py` | pub-side stats (image/lidar/imu) |
+| 2 | `analyze_sensor_subscribe.py` | sub-side stats |
 | 3 | `analyze_sensor_compare.py` | pub vs sub matched on `header_stamp` → `*_compare.png` |
-| 4 | `analyze_resource.py` | host + LiDAR device resource → `plots/resource/`, one PNG per metric |
+| 4 | `analyze_resource.py` | host + LiDAR device resource, one PNG per metric |
 
 ## How to read the output
 

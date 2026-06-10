@@ -140,8 +140,8 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
   this->declare_parameter("cmdline_input_bd_code", "000000000000001");
   this->declare_parameter("lvx_file_path", "/home/livox/livox_test.lvx");
 
-  // 흡수된 livox-gps-sync.service 의 GPRMC 파라미터.
-  // enabled=false 가 default — yaml 에서 명시적으로 true 줘야 작동 (vanilla 와 동일 거동).
+  // GPRMC parameters from the absorbed livox-gps-sync.service.
+  // enabled=false is the default — must be explicitly set true in yaml to work (same behavior as vanilla).
   this->declare_parameter("gprmc_enabled", false);
   this->declare_parameter("gprmc_port",    std::string("/dev/ttyUSB0"));
   this->declare_parameter("gprmc_baud",    9600);
@@ -181,8 +181,8 @@ DriverNode::DriverNode(const rclcpp::NodeOptions & node_options)
     LdsLidar *read_lidar = LdsLidar::GetInstance(publish_freq);
     lddc_ptr_->RegisterLds(static_cast<Lds *>(read_lidar));
 
-    // GPRMC feeder 설정은 SDK init (InitLdsLidar) 전에 — InfoChangeCallback 이
-    // 호출되는 시점에 enabled / port 가 이미 결정돼 있어야 함.
+    // Configure the GPRMC feeder before SDK init (InitLdsLidar) — enabled / port
+    // must already be decided by the time InfoChangeCallback is invoked.
     {
       bool        gprmc_enabled = this->get_parameter("gprmc_enabled").as_bool();
       std::string gprmc_port    = this->get_parameter("gprmc_port").as_string();

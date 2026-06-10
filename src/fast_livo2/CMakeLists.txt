@@ -88,11 +88,10 @@ find_package(pcl_conversions REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_msgs REQUIRED)
 find_package(livox_ros_driver2 REQUIRED)
-find_package(blackbox REQUIRED)
 find_package(vikit_common REQUIRED)
 find_package(vikit_ros REQUIRED)
-# vikit_common 은 plain-cmake 라이브러리(/usr/local 설치). 그 Config 는 include 만
-# 제공하고 라이브러리 경로는 비어 있어서, .so 를 직접 찾아 실행파일에 링크한다.
+# vikit_common is a plain-cmake library (installed in /usr/local). Its Config provides
+# only the includes and leaves the library path empty, so we find the .so directly and link it into the executable.
 find_library(VIKIT_COMMON_LIBRARY vikit_common REQUIRED)
 find_package(cv_bridge REQUIRED)
 find_package(image_transport REQUIRED)
@@ -110,8 +109,8 @@ find_package(Boost REQUIRED COMPONENTS thread)
 find_package(fmt REQUIRED)
 
 # Include directories for dependencies.
-# vikit_common/vikit_ros 의 include 는 ament_target_dependencies 가 처리.
-# vikit_common 라이브러리 링크만 VIKIT_COMMON_LIBRARY 로 별도 처리.
+# The vikit_common/vikit_ros includes are handled by ament_target_dependencies.
+# Only the vikit_common library link is handled separately via VIKIT_COMMON_LIBRARY.
 include_directories(
   ${EIGEN3_INCLUDE_DIR}
   ${PCL_INCLUDE_DIRS}
@@ -158,7 +157,7 @@ ament_target_dependencies(pre ${dependencies})
 ament_target_dependencies(imu_proc ${dependencies})
 ament_target_dependencies(laser_mapping ${dependencies})
 
-target_link_libraries(laser_mapping blackbox::blackbox ${COMMON_DEPENDENCIES})
+target_link_libraries(laser_mapping ${COMMON_DEPENDENCIES})
 
 target_link_libraries(vio ${COMMON_DEPENDENCIES})
 target_link_libraries(lio utils ${COMMON_DEPENDENCIES})
@@ -177,7 +176,6 @@ target_link_libraries(fastlivo_mapping
   lio
   pre
   imu_proc
-  blackbox::blackbox
   ${VIKIT_COMMON_LIBRARY}
   ${PCL_LIBRARIES}
   ${OpenCV_LIBRARIES}
@@ -194,10 +192,15 @@ endif()
 add_executable(monitor src/monitor.cpp)
 ament_target_dependencies(monitor rclcpp)
 
+# Host resource logger (1 Hz /proc·/sys polling → blackbox::resource, 4 files)
+add_executable(resource_logger src/resource_logger_node.cpp)
+ament_target_dependencies(resource_logger rclcpp)
+
 # Install the executable
 install(TARGETS
   fastlivo_mapping
   monitor
+  resource_logger
   DESTINATION lib/${PROJECT_NAME}
 )
 

@@ -1,7 +1,7 @@
 # LIVMapper::sync_packages
 
-# 코드 목적: 
-비동기로 따로 쌓이는 LiDAR·IMU·이미지 버퍼에서, ESIKF 업데이트 한 스텝에 먹일 한 묶음(MeasureGroup)을 시간순으로 잘라내는 함수. 
+# Purpose:
+A function that slices, in time order, one bundle (MeasureGroup) to feed a single ESIKF update step from the LiDAR/IMU/image buffers that accumulate asynchronously and separately.
 
 ```cpp
 bool LIVMapper::sync_packages(LidarMeasureGroup &meas)

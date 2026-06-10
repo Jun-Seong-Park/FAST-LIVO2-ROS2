@@ -6,7 +6,7 @@
       imu_topic: "/livox/imu"
       img_en: 1
       lidar_en: 1
-      ros_driver_bug_fix: false # ROS 드라이버 버그 픽스. 
+      ros_driver_bug_fix: false # ROS driver bug fix.
       
     extrin_calib:      
       extrinsic_T: [ -0.011, -0.02329, 0.04412] 
@@ -32,8 +32,8 @@
 
     vio:
       min_iterations: 10
-      outlier_threshold: 100 # 78 100 156 #100 200 500 700 infinite // 광도 잔차. 
-      img_point_cov: 1000 # 100 1000 // 밝기 측정 노이즈 분산 [intensty^2] 줄이면 이미지 신뢰, 늘리면 LiDAR 신뢰
+      outlier_threshold: 100 # 78 100 156 #100 200 500 700 infinite // photometric residual.
+      img_point_cov: 1000 # 100 1000 // brightness measurement noise variance [intensty^2]; lower trusts the image more, higher trusts the LiDAR more
       patch_size: 8
       patch_pyrimid_level: 4
       normal_en: true
@@ -45,38 +45,38 @@
     imu:
       imu_en: true
       imu_int_frame: 100
-      acc_cov: 0.8 # 0.2 센서 Datasheet 기준: 0.2, pcl5: 0.8, 0.5  https://github.com/pcl5/FAST-LIVO2/blob/main/config/mid360.yaml
-      gyr_cov: 0.5 # 0.5 센서 Datasheet 기준: 0.5
-      b_acc_cov: 0.001 # 0.1 어차피 이 값 사용 안됨
-      b_gyr_cov: 0.001 # 0.1 어차피 이 값 사용 안됨
+      acc_cov: 0.8 # 0.2 per sensor datasheet: 0.2, pcl5: 0.8, 0.5  https://github.com/pcl5/FAST-LIVO2/blob/main/config/mid360.yaml
+      gyr_cov: 0.5 # 0.5 per sensor datasheet: 0.5
+      b_acc_cov: 0.001 # 0.1 this value is unused anyway
+      b_gyr_cov: 0.001 # 0.1 this value is unused anyway
 
     ## MID360 sepecific: 
     # Distance Random Error cov (1sigma) : =<2cm(@10m), =<3cm(@0.2m)
     # Angular Random Error cov (1sigma) : =<0.15° (w/o distance)
     # 200,000 points per second
     lio:
-      min_iterations: 10       # 수렴 기회수
+      min_iterations: 10       # number of convergence attempts
       dept_err: 0.03           # pcl : 0.02
       beam_err: 0.15           # pcl : 0.15
-      min_eigen_value: 0.005   # 낮춰서 벽 평면 더 많이 수용
+      min_eigen_value: 0.005   # lowered to accept more wall planes
       voxel_size: 0.5          # meter
-      max_layer: 4             # voxel 레이어 높을 수록 연산량 매우 증가
-      max_points_num: 200      # voxel당 포인트 한도 증가
-      layer_init_num: [5, 5, 5, 5, 5]  # 평면 초기화 문턱 낮춤
+      max_layer: 4             # higher voxel layers greatly increase computation
+      max_points_num: 200      # increased per-voxel point limit
+      layer_init_num: [5, 5, 5, 5, 5]  # lowered plane initialization threshold
 
     local_map:  
-      map_sliding_en: false # 맵 슬라이딩. 맵 최대 크기 제한
+      map_sliding_en: false # map sliding. limits the maximum map size
       half_map_size: 100
       sliding_thresh: 5.0
 
     uav:
       imu_rate_odom: false
-      gravity_align_en: true # true 가 맞음 https://github.com/hku-mars/FAST-LIVO2/issues/119
+      gravity_align_en: true # true is correct https://github.com/hku-mars/FAST-LIVO2/issues/119
 
     publish:
       dense_map_en: true
       pub_effect_point_en: false
-      pub_plane_en: true # voxel 발행
+      pub_plane_en: true # publish voxels
       pub_scan_num: 1
       blind_rgb_points: 0.0
 
@@ -88,7 +88,7 @@
       pcd_save_en: true
       type: 0 # 0: World Frame, 1: Body Frame;
       colmap_output_en: false # need to set interval = -1 
-      filter_size_pcd: 0.005 # 포인트 정밀도 단위: meter (5mm)
+      filter_size_pcd: 0.005 # point precision, unit: meter (5mm)
       interval: -1
       # how many LiDAR frames saved in each pcd file;
       # -1 : all frames will be saved in ONE pcd file, may lead to memory crash when having too much frames.

@@ -108,8 +108,8 @@ void LivoxLidarCallback::LidarInfoChangeCallback(const uint32_t handle,
   SetLivoxLidarWorkMode(handle, kLivoxLidarNormal, WorkModeChangedCallback, nullptr);
   EnableLivoxLidarImuData(handle, LivoxLidarCallback::EnableLivoxLidarImuDataCallback, lds_lidar);
 
-  // GPRMC 시간동기 — 흡수된 livox-gps-sync.service 역할.
-  // enabled=false 면 즉시 return 이라 vanilla 동작 (no-op).
+  // GPRMC time sync — the role of the absorbed livox-gps-sync.service.
+  // If enabled=false it returns immediately, so vanilla behavior (no-op).
   GprmcFeeder::GetInstance().OnLidarHandle(handle);
   return;
 }

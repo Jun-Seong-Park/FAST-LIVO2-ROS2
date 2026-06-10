@@ -132,11 +132,11 @@ class Lddc final {
   PublisherPtr GetCurrentImuPublisher(uint8_t index);
 
  private:
-  // === LIV_handhold 방식 mmap 타임스탬프 공유 (inline writer) ===
-  // pointt->low 에 최신 포인트클라우드/CustomMsg 의 timebase (ns) 를 기록.
-  // reader(image_mmap_stamper_node) 가 같은 파일을 mmap 으로 읽어 카메라
-  // 프레임 header.stamp 에 주입 → 두 센서 동일 time domain 공유.
-  // 구조체 레이아웃은 LIV_handhold/mvs_ros_driver/src/grab_trigger.cpp 와 동일.
+  // === LIV_handhold-style mmap timestamp sharing (inline writer) ===
+  // Records the timebase (ns) of the latest pointcloud/CustomMsg into pointt->low.
+  // The reader (image_mmap_stamper_node) mmaps the same file and injects it into
+  // the camera frame header.stamp → the two sensors share the same time domain.
+  // The struct layout matches LIV_handhold/mvs_ros_driver/src/grab_trigger.cpp.
   struct SharedTimestamp { int64_t high; int64_t low; };
   void TryOpenSharedMmap();
   void WriteSharedStamp(uint64_t ns);

@@ -2,14 +2,12 @@ build/
 install/
 log/
 .claude/
-trace/plots
-trace/log
-trace/notes
-trace/plots
 src/fast_livo2/Log/
-src/blackbox/plots/
+
+# blackbox analysis outputs (png) — code in blackbox/ is versioned, outputs are not
+blackbox/Log/
 
 # Doxygen config + generated docs (econ_ros2_driver)
-src/sensor/econ_ros2_driver/Doxyfile
-src/sensor/econ_ros2_driver/html/
-src/sensor/econ_ros2_driver/latex/
+src/econ_ros2_driver/Doxyfile
+src/econ_ros2_driver/html/
+src/econ_ros2_driver/latex/
